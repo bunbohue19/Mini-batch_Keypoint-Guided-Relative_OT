@@ -1,0 +1,17 @@
+method AC_mpot_k1_m65_mass0.60, iter: 01000, precision: 0.56478
+method AC_mpot_k1_m65_mass0.65, iter: 01500, precision: 0.59463
+method AC_mpot_k1_m65_mass0.70, iter: 01000, precision: 0.56418
+method AC_mpot_k1_m65_mass0.75, iter: 01000, precision: 0.57433
+method AC_mpot_k1_m65_mass0.80, iter: 01000, precision: 0.55881
+method AC_mpot_k1_m65_mass0.85, iter: 01000, precision: 0.57910
+method AC_mpot_k1_m65_mass0.90, iter: 01000, precision: 0.57194
+method AC_mpot_k1_m65_mass0.95, iter: 01000, precision: 0.54925
+method AC_mpot_k1_m65_mass0.60, iter: 01500, precision: 0.57612
+method AC_mpot_k1_m65_mass0.65, iter: 01000, precision: 0.56896
+method AC_mpot_k1_m65_mass0.70, iter: 01000, precision: 0.58866
+method AC_mpot_k1_m65_mass0.75, iter: 01000, precision: 0.56239
+method AC_mpot_k1_m65_mass0.80, iter: 01000, precision: 0.53791
+method AC_mpot_k1_m65_mass0.85, iter: 01000, precision: 0.55164
+method AC_mpot_k1_m65_mass0.90, iter: 01000, precision: 0.56537
+method AC_mpot_k1_m65_mass0.95, iter: 01000, precision: 0.56597
+method AC_mpot_k1_m65_mass1.00, iter: 01000, precision: 0.53313

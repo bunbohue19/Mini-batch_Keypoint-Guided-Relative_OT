@@ -1,0 +1,10 @@
+# Python 3.12
+numpy
+scipy
+matplotlib
+geomloss
+pot
+cvxpy
+torch
+torchvision
+tqdm
