@@ -19,7 +19,7 @@ LIST_DIR="${DATA_ROOT}/office-home"
 # ── Hyper-parameters ───────────────────────────────────────────────────────
 GPU=0
 NET=ResNet50
-OT_TYPE=balanced
+OT_TYPE=partial
 EPSILON=0          # 0 = exact EMD; >0 = masked Sinkhorn (balanced)
 ETA1=0.01
 ETA2=0.5
@@ -33,7 +33,7 @@ TEST_INTERVAL=500
 RUN_ID=0
 
 # KPG-RL-KP parameters  (see keypoint_guided_OT.py kpg_rl_kp)
-ALPHA=0.5           # combination coeff: alpha*C_norm + (1-alpha)*G_norm
+ALPHA=0.6           # combination coeff: alpha * C_norm + (1 - alpha) * G_norm
 TAU_S=0.1           # softmax temperature for source relation profiles
 TAU_T=0.1           # softmax temperature for target relation profiles
 

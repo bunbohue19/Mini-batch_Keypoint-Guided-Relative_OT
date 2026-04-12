@@ -404,7 +404,7 @@ def solve_ot_kpg(
     Mask = build_kpg_mask(len(a), len(b), I_kp, J_kp)
 
     G = compute_guiding_matrix(feat_s, feat_t, I_kp, J_kp, tau_s, tau_t)
-    G = G / (G.max() + 1e-10)                       # normalise to [0, 1]
+    G = G / (G.max() + 1e-10)                        # normalise to [0, 1]
 
     C_norm = M_cpu / (M_cpu.max() + 1e-10)           # normalise to [0, 1]
     M_kpg = alpha * C_norm + (1.0 - alpha) * G       # KPG-RL-KP blending
