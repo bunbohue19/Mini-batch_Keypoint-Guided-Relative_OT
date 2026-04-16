@@ -18,8 +18,8 @@ LIST_DIR="${DATA_ROOT}/office-home"
 
 # ── Hyper-parameters ───────────────────────────────────────────────────────
 GPU=0
-NET=ResNet50
 OT_TYPE=unbalanced
+NET=ResNet50
 EPSILON=0          # 0 = exact EMD; >0 = masked Sinkhorn (balanced)
 ETA1=0.01
 ETA2=0.5
