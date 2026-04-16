@@ -242,10 +242,12 @@ def compute_guiding_matrix(feat_s, feat_t, I_kp, J_kp, tau_s=0.1, tau_t=0.1):
     C_tt = C_tt / (C_tt.max() + 1e-10)
 
     # Relation of each source point to each source keypoint: (m, U)
-    R_s = _softmax_rows(-C_ss[:, I_kp] / tau_s)
+    # The -2* factor matches the original KPG-RL implementation (utils.py):
+    #   Rs = softmax_matrix(-2 * C1_kp / tau_s)
+    R_s = _softmax_rows(-2.0 * C_ss[:, I_kp] / tau_s)
 
     # Relation of each target point to each target keypoint: (n, U)
-    R_t = _softmax_rows(-C_tt[:, J_kp] / tau_t)
+    R_t = _softmax_rows(-2.0 * C_tt[:, J_kp] / tau_t)
 
     return _js_divergence_matrix(R_s, R_t)   # (m, n)
 
@@ -404,8 +406,11 @@ def solve_ot_kpg(
     Mask = build_kpg_mask(len(a), len(b), I_kp, J_kp)
 
     G = compute_guiding_matrix(feat_s, feat_t, I_kp, J_kp, tau_s, tau_t)
-    G = G / (G.max() + 1e-10)                        # normalise to [0, 1]
-
+    # Match original KPG-RL-KP (keypoint_guided_OT.py:100-102):
+    #   C /= (C.max() + eps)
+    #   G = alpha * C + (1 - alpha) * G
+    # Only C is normalised; G (JSD) is naturally bounded in [0, ln(2)]
+    # and is NOT normalised before blending.
     C_norm = M_cpu / (M_cpu.max() + 1e-10)           # normalise to [0, 1]
     M_kpg = alpha * C_norm + (1.0 - alpha) * G       # KPG-RL-KP blending
 
