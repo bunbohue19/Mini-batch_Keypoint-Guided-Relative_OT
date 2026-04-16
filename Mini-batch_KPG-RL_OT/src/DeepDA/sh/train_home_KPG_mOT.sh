@@ -19,7 +19,7 @@ LIST_DIR="${DATA_ROOT}/office-home"
 # ── Hyper-parameters ───────────────────────────────────────────────────────
 GPU=0
 NET=ResNet50
-OT_TYPE=partial
+OT_TYPE=unbalanced
 EPSILON=0          # 0 = exact EMD; >0 = masked Sinkhorn (balanced)
 ETA1=0.01
 ETA2=0.5
@@ -33,7 +33,7 @@ TEST_INTERVAL=500
 RUN_ID=0
 
 # KPG-RL-KP parameters  (see keypoint_guided_OT.py kpg_rl_kp)
-ALPHA=0.8           # combination coeff: alpha * C_norm + (1 - alpha) * G_norm
+ALPHA=0.5           # combination coeff: alpha * C_norm + (1 - alpha) * G_norm
 TAU_S=0.1           # softmax temperature for source relation profiles
 TAU_T=0.1           # softmax temperature for target relation profiles
 
@@ -62,7 +62,7 @@ for ENTRY in "${TASK_LIST[@]}"; do
     read -r SRC_FILE TGT_FILE TASK <<< "${ENTRY}"
     S_PATH="${LIST_DIR}/${SRC_FILE}"
     T_PATH="${LIST_DIR}/${TGT_FILE}"
-    OUTPUT_DIR="home_${TASK}_${METHOD}_k${K}_m${M}_eps${EPSILON}_alpha${ALPHA}_run${RUN_ID}"
+    OUTPUT_DIR="results/home_${TASK}_${METHOD}_${OT_TYPE}_k${K}_m${M}_eps${EPSILON}_alpha${ALPHA}_run${RUN_ID}"
 
     echo ""
     echo "── ${TASK}  →  ${OUTPUT_DIR}"
