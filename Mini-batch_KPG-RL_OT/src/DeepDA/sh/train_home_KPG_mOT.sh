@@ -38,7 +38,7 @@ TAU_S=0.1           # softmax temperature for source relation profiles
 TAU_T=0.1           # softmax temperature for target relation profiles
 
 METHOD="KPG_mOT"
-FINAL_LOG="home_${METHOD}_run${RUN_ID}_log.txt"
+FINAL_LOG="results/home_${METHOD}_${OT_TYPE}_${ALPHA}_run${RUN_ID}_log.txt"
 
 echo "=== Office-Home  |  ${METHOD}  |  run ${RUN_ID} ==="
 echo "    KPG params: alpha=${ALPHA}  tau_s=${TAU_S}  tau_t=${TAU_T}"
@@ -62,7 +62,7 @@ for ENTRY in "${TASK_LIST[@]}"; do
     read -r SRC_FILE TGT_FILE TASK <<< "${ENTRY}"
     S_PATH="${LIST_DIR}/${SRC_FILE}"
     T_PATH="${LIST_DIR}/${TGT_FILE}"
-    OUTPUT_DIR="results/home_${TASK}_${METHOD}_${OT_TYPE}_k${K}_m${M}_eps${EPSILON}_alpha${ALPHA}_run${RUN_ID}"
+    OUTPUT_DIR="home_${TASK}_${METHOD}_${OT_TYPE}_k${K}_m${M}_eps${EPSILON}_alpha${ALPHA}_run${RUN_ID}"
 
     echo ""
     echo "── ${TASK}  →  ${OUTPUT_DIR}"
