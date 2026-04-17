@@ -18,3 +18,4 @@ iter: 07999, precision: 0.70016
 iter: 08499, precision: 0.69836
 iter: 08999, precision: 0.70286
 iter: 09499, precision: 0.70264
+iter: 09999, precision: 0.70106

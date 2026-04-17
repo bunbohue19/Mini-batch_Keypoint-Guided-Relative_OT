@@ -15,3 +15,7 @@ iter: 06499, precision: 0.70691
 iter: 06999, precision: 0.70530
 iter: 07499, precision: 0.70874
 iter: 07999, precision: 0.70507
+iter: 08499, precision: 0.70691
+iter: 08999, precision: 0.70874
+iter: 09499, precision: 0.70370
+iter: 09999, precision: 0.70484

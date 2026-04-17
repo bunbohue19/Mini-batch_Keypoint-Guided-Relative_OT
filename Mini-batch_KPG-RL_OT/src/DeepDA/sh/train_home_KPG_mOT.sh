@@ -17,7 +17,7 @@ export OFFICE_HOME_IMAGES_ROOT="${DATA_ROOT}/office-home/images"
 LIST_DIR="${DATA_ROOT}/office-home"
 
 # ── Hyper-parameters ───────────────────────────────────────────────────────
-GPU=2
+GPU=1
 OT_TYPE=unbalanced
 NET=ResNet50
 EPSILON=0.01       # unbalanced OT requires epsilon > 0 for Sinkhorn;
@@ -34,7 +34,7 @@ TEST_INTERVAL=500
 RUN_ID=0
 
 # KPG-RL-KP parameters  (see keypoint_guided_OT.py kpg_rl_kp)
-ALPHA=0.7           # combination coeff: alpha * C_norm + (1 - alpha) * G_norm
+ALPHA=0.9           # combination coeff: alpha * C_norm + (1 - alpha) * G_norm
 TAU_S=0.1           # softmax temperature for source relation profiles
 TAU_T=0.1           # softmax temperature for target relation profiles
 
