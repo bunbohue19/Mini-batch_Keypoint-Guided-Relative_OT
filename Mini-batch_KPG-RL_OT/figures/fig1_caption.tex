@@ -1,0 +1,22 @@
+\begin{figure*}[t]
+  \centering
+  \includegraphics[width=\linewidth]{fig1_motivation.pdf}
+  \caption{\textbf{Mini-batch OT loses structural information.}
+  Matching produced by
+  \textbf{(a)} Full OT on all 60 samples per domain
+    (88.3\% matching accuracy);
+  \textbf{(b)} mini-batch OT (mOT) on a 15-sample mini-batch
+    (60.0\%);
+  \textbf{(c)} mini-batch POT (mPOT, mass $s{=}0.5$) on the same mini-batch
+    (73.3\%);
+  \textbf{(d)} the proposed KPG-RL with $9$~keypoints (3 per class, red) on the
+    same mini-batch (86.7\%).
+  Markers: shape indicates class ($+/\circ/\triangle$), colour indicates domain
+  (blue~=~source, green~=~target); large red markers are keypoints. Lines show
+  the transport plan: gray~=~same-class (correct), red~=~cross-class (wrong).
+  Faded markers in (b)-(d) show the full data behind the mini-batch as
+  context. Full OT preserves the cluster structure and matches with high
+  accuracy; mini-batch methods lose structure and create many mismatches;
+  keypoint guidance restores correct matching up to the Full OT upper bound.}
+  \label{fig:motivation}
+\end{figure*}

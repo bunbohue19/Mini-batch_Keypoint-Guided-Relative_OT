@@ -6,3 +6,16 @@ iter: 01999, precision: 0.76566
 iter: 02499, precision: 0.76750
 iter: 02999, precision: 0.76268
 iter: 03499, precision: 0.75947
+iter: 03999, precision: 0.77232
+iter: 04499, precision: 0.76589
+iter: 04999, precision: 0.76107
+iter: 05499, precision: 0.76084
+iter: 05999, precision: 0.76566
+iter: 06499, precision: 0.76337
+iter: 06999, precision: 0.76383
+iter: 07499, precision: 0.76521
+iter: 07999, precision: 0.76635
+iter: 08499, precision: 0.76635
+iter: 08999, precision: 0.76475
+iter: 09499, precision: 0.76062
+iter: 09999, precision: 0.75740
