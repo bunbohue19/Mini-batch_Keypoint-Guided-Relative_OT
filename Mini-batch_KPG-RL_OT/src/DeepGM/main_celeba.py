@@ -5,7 +5,6 @@ import csv
 import logging
 import os
 import random
-
 import imageio
 import numpy as np
 import torch
@@ -43,8 +42,8 @@ class CelebADataset(Dataset):
 
 def main():
     parser = argparse.ArgumentParser(description="CelebA generative model")
-    parser.add_argument("--datadir", default="./data/celeba")
-    parser.add_argument("--outdir", default="./result")
+    parser.add_argument("--datadir", default="/home/doanpt/locnd/Mini-batch_Keypoint-Guided-Relative_OT/Mini-batch_KPG-RL_OT/data/celeba")
+    parser.add_argument("--outdir", default="./results")
     parser.add_argument("--gpu-id", type=str, default="0")
     parser.add_argument("--m", type=int, default=100)
     parser.add_argument("--k", type=int, default=8)
@@ -151,7 +150,8 @@ def main():
             model.train()
             logger.info(f"wrote images to {outdir_images}")
             torch.cuda.empty_cache()
-            fid = calculate_fid_given_paths([outdir_images, "fid_stats_celeba_test.npz"], 4, device, 2048, args.num_workers)
+            fid_stats_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "../../../Baselines/Mini-batch-OT/DeepGM/fid_stats_celeba_test.npz")
+            fid = calculate_fid_given_paths([outdir_images, fid_stats_path], 4, device, 2048, args.num_workers)
             logger.info(f"FID score: {fid}")
             save_acc(csv_file, epoch, fid)
 

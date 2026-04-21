@@ -17,7 +17,7 @@ export OFFICE_HOME_IMAGES_ROOT="${DATA_ROOT}/office-home/images"
 LIST_DIR="${DATA_ROOT}/office-home"
 
 # ── Hyper-parameters ───────────────────────────────────────────────────────
-GPU=1
+GPU=2
 OT_TYPE=unbalanced
 NET=ResNet50
 EPSILON=0.01       # unbalanced OT requires epsilon > 0 for Sinkhorn;

@@ -6,8 +6,8 @@ Generate Figure 1 for the paper: motivation for KPG-RL in mini-batch OT.
   (c) mPOT     — same mini-batch, partial transport, better but still flawed.
 
 Outputs:
-  fig1_motivation.pdf  — combined 1×3 figure for the paper
-  fig1a_full_ot.pdf, fig1b_mot.pdf, fig1c_mpot.pdf — individual panels
+  fig1_motivation.png  — combined 1×3 figure for the paper
+  fig1a_full_ot.png, fig1b_mot.png, fig1c_mpot.png — individual panels
 
 Style matches Figure 4 of the KPG-RL paper (Gu et al., NeurIPS 2022):
   blue markers = source, green markers = target,
@@ -17,6 +17,7 @@ Style matches Figure 4 of the KPG-RL paper (Gu et al., NeurIPS 2022):
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+from matplotlib.lines import Line2D
 import numpy as np
 import ot
 
@@ -25,24 +26,21 @@ import ot
 # -----------------------------------------------------------------------
 np.random.seed(42)
 
-N_PER_CLASS = 20       # samples per class in full data
+N_PER_CLASS = 25       # samples per class in full data
 N_CLASSES = 3
-MINI_BATCH_SIZE = 6    # samples per domain in the mini-batch (2 per class ideally,
-                       # but we'll sample unevenly to lose structure)
+MINI_BATCH_SIZE = 16   # samples per domain in the mini-batch (uneven across classes)
 
-# Source cluster centres (well separated for full OT, but close enough
-# that a sparse mini-batch loses the cluster boundary)
-src_centres = np.array([[-2.0, 2.0],
-                         [0.0, -1.5],
-                         [2.5, 1.5]])
+# Source cluster centres — triangle arrangement for clear visual separation
+src_centres = np.array([[-2.5, 2.0],   # class 0: top-left
+                         [0.0, -2.0],   # class 1: bottom-center
+                         [2.5, 2.0]])   # class 2: top-right
 
-# Target cluster centres (shifted; gaps between clusters are moderate
-# so mini-batch sampling creates ambiguity)
-tgt_centres = np.array([[-0.5, 3.0],
-                         [1.5, 0.0],
-                         [4.0, 2.5]])
+# Target cluster centres — shifted consistently to the right/up
+tgt_centres = np.array([[-1.0, 3.5],   # class 0
+                         [1.5, -0.5],   # class 1
+                         [4.0, 3.5]])   # class 2
 
-COV = 0.15 * np.eye(2)
+COV = 0.12 * np.eye(2)
 
 source_all, target_all = [], []
 labels_s_all, labels_t_all = [], []
@@ -59,14 +57,14 @@ labels_t_all = np.array(labels_t_all)
 
 # Mini-batch: deliberately uneven sampling to lose cluster structure.
 # The imbalance forces OT to create cross-class matches.
-# Class 0: 4 source, 1 target   → big surplus source
-# Class 1: 1 source, 3 target   → big deficit source
-# Class 2: 1 source, 2 target   → slight deficit
-# This gives mOT ≈ 50%, mPOT ≈ 67% — mPOT helps but is still imperfect.
+# Class 0: 10 source, 3 target  → big surplus source
+# Class 1:  3 source, 10 target → big deficit source
+# Class 2:  3 source, 3 target  → balanced but sparse
+# This gives mOT ≈ 56%, mPOT ≈ 77% — mPOT helps but is still imperfect.
 np.random.seed(1)
 mb_s_idx, mb_t_idx = [], []
 mb_s_labels, mb_t_labels = [], []
-for c, (ns, nt) in enumerate([(4, 1), (1, 3), (1, 2)]):
+for c, (ns, nt) in enumerate([(10, 3), (3, 10), (3, 3)]):
     cls_s = np.where(labels_s_all == c)[0]
     cls_t = np.where(labels_t_all == c)[0]
     chosen_s = np.random.choice(cls_s, ns, replace=False)
@@ -103,7 +101,7 @@ def solve_mot(xs, xt):
     return pi
 
 
-def solve_mpot(xs, xt, mass_frac=0.7):
+def solve_mpot(xs, xt, mass_frac=0.65):
     C = ot.dist(xs, xt, metric="sqeuclidean")
     a, b = ot.unif(len(xs)), ot.unif(len(xt))
     pi = ot.partial.partial_wasserstein(a, b, C, m=mass_frac)
@@ -123,7 +121,7 @@ def matching_accuracy(pi, labels_s, labels_t):
 
 pi_full = solve_full_ot(source_all, target_all)
 pi_mot = solve_mot(source_mb, target_mb)
-pi_mpot = solve_mpot(source_mb, target_mb, mass_frac=0.5)
+pi_mpot = solve_mpot(source_mb, target_mb, mass_frac=0.65)
 
 acc_full = matching_accuracy(pi_full, labels_s_all, labels_t_all)
 acc_mot = matching_accuracy(pi_mot, mb_s_labels, mb_t_labels)
@@ -171,11 +169,11 @@ def draw_transport(ax, xs, xt, pi, labels_s, labels_t, title, acc,
             idx_s = np.where(labels_s_full == c)[0]
             idx_t = np.where(labels_t_full == c)[0]
             ax.scatter(source_full[idx_s, 0], source_full[idx_s, 1],
-                       marker=MARKERS_S[c], c=SRC_COLOR, s=15, alpha=0.10,
-                       linewidths=0.5, zorder=0, edgecolors=SRC_COLOR)
+                       marker=MARKERS_S[c], c=SRC_COLOR, s=25, alpha=0.22,
+                       linewidths=0.8, zorder=0, edgecolors=SRC_COLOR)
             ax.scatter(target_full[idx_t, 0], target_full[idx_t, 1],
-                       marker=MARKERS_T[c], c="none", s=15, alpha=0.10,
-                       linewidths=0.5, zorder=0, edgecolors=TGT_COLOR)
+                       marker=MARKERS_T[c], c="none", s=25, alpha=0.22,
+                       linewidths=0.8, zorder=0, edgecolors=TGT_COLOR)
 
     # Draw data points (foreground)
     for c in range(N_CLASSES):
@@ -227,10 +225,22 @@ draw_transport(axes[2], source_mb, target_mb, pi_mpot,
                show_all_data=True, source_full=source_all, target_full=target_all,
                labels_s_full=labels_s_all, labels_t_full=labels_t_all)
 
+legend_handles = [
+    Line2D([0], [0], marker='o', color='w', markerfacecolor=SRC_COLOR,
+           markeredgecolor=SRC_COLOR, markersize=8, label='Source'),
+    Line2D([0], [0], marker='o', color='w', markerfacecolor='none',
+           markeredgecolor=TGT_COLOR, markersize=8, label='Target'),
+    Line2D([0], [0], color=CORRECT_LINE, linewidth=1.5, label='Correct match'),
+    Line2D([0], [0], color=WRONG_LINE, linewidth=1.5, label='Incorrect match'),
+]
+fig.legend(handles=legend_handles, loc='lower center', ncol=4,
+           fontsize=10, framealpha=0.9, edgecolor='#D1D5DB',
+           bbox_to_anchor=(0.5, -0.05))
+
 plt.tight_layout(w_pad=1.5)
 
 out_dir = "/home/doanpt/locnd/Mini-batch_Keypoint-Guided-Relative_OT/Mini-batch_KPG-RL_OT/figures"
-fig.savefig(f"{out_dir}/fig1_motivation.pdf", bbox_inches="tight", dpi=300)
+
 fig.savefig(f"{out_dir}/fig1_motivation.png", bbox_inches="tight", dpi=300)
 
 # ---- Individual panels -------------------------------------------------
@@ -247,7 +257,6 @@ for idx, (tag, xs, xt, pi, ls, lt, title, acc, show_bg) in enumerate([
                    show_all_data=show_bg, source_full=source_all, target_full=target_all,
                    labels_s_full=labels_s_all, labels_t_full=labels_t_all)
     fig_single.tight_layout()
-    fig_single.savefig(f"{out_dir}/{tag}.pdf", bbox_inches="tight", dpi=300)
     fig_single.savefig(f"{out_dir}/{tag}.png", bbox_inches="tight", dpi=300)
     plt.close(fig_single)
 

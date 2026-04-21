@@ -265,7 +265,7 @@ def sinkhorn_kpg_log(p, q, C, Mask, reg=0.01, niter=1000, thresh=1e-9):
     q    : ndarray (n,)    target marginal
     C    : ndarray (m, n)  (blended) cost matrix
     Mask : ndarray (m, n)  binary mask  (0 = forbidden, 1 = allowed)
-    reg  : float           entropic regularisation coefficient
+    reg  : float           entropic regularization coefficient
 
     Returns
     -------
@@ -380,7 +380,7 @@ def solve_ot_kpg(
     a, b        : ndarray  source / target marginals
     M_cpu       : ndarray (m, n)  standard blended cost (M_embed + M_sce)
     ot_type     : str      'balanced' | 'unbalanced' | 'partial'
-    epsilon     : float    entropic regularisation (0 = exact LP / EMD)
+    epsilon     : float    entropic regularization (0 = exact LP / EMD)
     tau         : float    marginal penalisation for unbalanced OT
     mass        : float    transported mass for partial OT
     feat_s      : ndarray (m, d)  source feature embeddings (CPU numpy)
@@ -826,11 +826,11 @@ if __name__ == "__main__":
     )
     parser.add_argument("--eta1",    type=float, default=0.1,  help="weight of embedding cost")
     parser.add_argument("--eta2",    type=float, default=0.1,  help="weight of SCE cost")
-    parser.add_argument("--epsilon", type=float, default=0.0,  help="OT entropic regularisation (0 = exact)")
+    parser.add_argument("--epsilon", type=float, default=0.0,  help="OT entropic regularization (0 = exact)")
     parser.add_argument("--tau",     type=float, default=1.0,  help="marginal penalisation (unbalanced OT)")
     parser.add_argument("--mass",    type=float, default=0.5,  help="transported mass ratio (partial OT)")
     parser.add_argument("--use_bomb",action="store_true",      help="use BoMb hierarchical scheme")
-    parser.add_argument("--be",      type=float, default=0.0,  help="inter-batch OT regularisation")
+    parser.add_argument("--be",      type=float, default=0.0,  help="inter-batch OT regularization")
     parser.add_argument("--k",       type=int,   default=1,    help="number of mini-batches per update")
 
     # ---- KPG-RL parameters ---------------------------------------------

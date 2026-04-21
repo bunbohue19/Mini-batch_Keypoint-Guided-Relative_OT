@@ -21,7 +21,7 @@ GPU=0
 NET=ResNet50
 OT_TYPE=balanced
 EPSILON=0
-BE=0               # inter-batch OT regularisation (0 = exact EMD)
+BE=0               # inter-batch OT regularization (0 = exact EMD)
 ETA1=0.01
 ETA2=0.5
 TAU=0.5

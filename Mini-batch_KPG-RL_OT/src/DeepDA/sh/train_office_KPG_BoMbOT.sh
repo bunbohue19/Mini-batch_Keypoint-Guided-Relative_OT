@@ -21,7 +21,7 @@ GPU=0
 NET=ResNet50
 OT_TYPE=balanced
 EPSILON=0          # 0 = exact EMD; >0 = masked Sinkhorn (balanced)
-BE=0               # inter-batch OT regularisation
+BE=0               # inter-batch OT regularization
 ETA1=0.1
 ETA2=0.1
 TAU=1.0
