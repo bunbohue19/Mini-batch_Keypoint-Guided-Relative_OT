@@ -55,22 +55,36 @@ def _sq_dist(A, B):
     )
 
 
-def select_keypoints(ys_np, pred_xt_np, n_class):
+def select_keypoints(ys_np, pred_xt_np, n_class, conf_thresh=0.0):
     """Select keypoint pairs from source labels and target pseudo-labels.
 
-    For each class present in both source and target, the first occurrence
-    in each is taken as the representative keypoint.
+    For each class `c` present in both source and target:
+      - Source keypoint: first source sample with label `c` (labels are
+        ground truth, so any sample is a valid keypoint).
+      - Target keypoint: target sample with the HIGHEST predicted probability
+        for class `c` (most confident pseudo-label) — far more reliable than
+        an arbitrary first occurrence, and limits the damage from wrong
+        pseudo-labels early in training.
+      - If `conf_thresh > 0`, classes whose best target confidence is below
+        the threshold are skipped — the mask then leaves those samples free
+        to be matched by the standard (cost + relation) signal.
 
     Returns (I_kp, J_kp) — lists of paired source/target indices.
     """
-    pseudo_labels = pred_xt_np.argmax(axis=1)
+    pseudo_conf = pred_xt_np.max(axis=1)             # (n,)  per-sample max prob
+    pseudo_labels = pred_xt_np.argmax(axis=1)        # (n,)
     I_kp, J_kp = [], []
     for c in range(n_class):
         src_idx = np.where(ys_np == c)[0]
         tgt_idx = np.where(pseudo_labels == c)[0]
-        if len(src_idx) > 0 and len(tgt_idx) > 0:
-            I_kp.append(int(src_idx[0]))
-            J_kp.append(int(tgt_idx[0]))
+        if len(src_idx) == 0 or len(tgt_idx) == 0:
+            continue
+        # Most confident target sample for class c
+        best_t = int(tgt_idx[np.argmax(pseudo_conf[tgt_idx])])
+        if pseudo_conf[best_t] < conf_thresh:
+            continue
+        I_kp.append(int(src_idx[0]))
+        J_kp.append(best_t)
     return I_kp, J_kp
 
 
@@ -148,8 +162,14 @@ def _solve_ot_kpg(a, b, C_np, method, epsilon, tau, mass,
                    tau_s, tau_t, alpha):
     """OT with KPG-RL-KP keypoint guidance.
 
-    Blending: cost = alpha * C_norm + (1-alpha) * G
+    Blending: cost = alpha * C_norm + (1-alpha) * G,  with M_kpg in [0, ~1].
     G is NOT normalised (JSD is naturally bounded in [0, ln2]).
+
+    Each branch dispatches DIRECTLY to the right POT solver.  We intentionally
+    do not call _solve_ot for jpmbot because that helper re-normalises by the
+    cost maximum — which would destroy the mask penalty (after re-norm,
+    legitimate cells collapse to ~1/penalty and Sinkhorn loses all structure).
+
     Falls back to standard OT when no shared class exists in the batch.
     """
     I_kp, J_kp = select_keypoints(ys_np, pred_xt_np, n_class)
@@ -160,19 +180,46 @@ def _solve_ot_kpg(a, b, C_np, method, epsilon, tau, mass,
     G = compute_guiding_matrix(feat_s, feat_t, I_kp, J_kp, tau_s, tau_t)
 
     C_norm = C_np / (C_np.max() + 1e-10)
-    M_kpg = alpha * C_norm + (1.0 - alpha) * G
+    M_kpg = alpha * C_norm + (1.0 - alpha) * G        # values in [0, ~1]
 
-    if method == "jdot" and epsilon > 0:
-        return sinkhorn_kpg_log(a, b, M_kpg, Mask, reg=epsilon)
-    elif method == "jdot" and epsilon == 0:
+    # Adaptive mask-penalty.
+    #
+    # For Sinkhorn-based solvers the kernel exp(-cost/reg) must stay
+    # representable in float64 (>~5e-324) — otherwise division-by-zero in
+    # the iterations produces NaN.  exp(-50) ≈ 2e-22 is safely positive
+    # AND four orders of magnitude smaller than the worst legitimate kernel
+    # value exp(-1/reg), so the mask is effectively enforced.
+    #
+    # For EMD/partial-EMD (epsilon=0) any penalty > legitimate max (~1)
+    # works; we use 100 there since no exp() is involved.
+    sinkhorn_pen = max(2.0, 50.0 * epsilon)            # scales with reg
+    emd_pen      = 100.0                                # exact LP penalty
+
+    if method == "jdot":
+        if epsilon == 0:
+            M_masked = M_kpg.copy()
+            M_masked[Mask == 0] = emd_pen
+            return ot.emd(a, b, M_masked)
+        else:
+            # Exact masked Sinkhorn (log-domain) — preferred for entropic balanced.
+            return sinkhorn_kpg_log(a, b, M_kpg, Mask, reg=epsilon)
+
+    elif method == "jumbot":
         M_masked = M_kpg.copy()
-        M_masked[Mask == 0] = M_masked.max() * 1e3 + 1.0
-        return ot.emd(a, b, M_masked)
-    else:
-        # unbalanced / partial: encode mask as large additive penalty
+        M_masked[Mask == 0] = sinkhorn_pen
+        return ot.unbalanced.sinkhorn_knopp_unbalanced(a, b, M_masked, epsilon, tau)
+
+    elif method == "jpmbot":
+        # M_kpg is already normalised to [0, ~1] — no further normalisation.
         M_masked = M_kpg.copy()
-        M_masked[Mask == 0] = M_masked.max() * 1e3 + 1.0
-        return _solve_ot(a, b, M_masked, method, epsilon, tau, mass)
+        if epsilon == 0:
+            M_masked[Mask == 0] = emd_pen
+            return ot.partial.partial_wasserstein(a, b, M_masked, m=mass)
+        else:
+            M_masked[Mask == 0] = sinkhorn_pen
+            return ot.partial.entropic_partial_wasserstein(
+                a, b, M_masked, m=mass, reg=epsilon
+            )
 
 
 # -----------------------------------------------------------------------

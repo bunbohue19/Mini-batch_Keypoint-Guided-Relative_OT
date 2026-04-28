@@ -227,7 +227,7 @@ def compute_guiding_matrix(feat_s, feat_t, I_kp, J_kp, tau_s=0.1, tau_t=0.1):
     -------
     G : ndarray (m, n)
     """
-    def sq_dist(A, B):
+    def sq_dist(A, B):                                 # A^2 + B^2 - 2AB.T
         return (
             np.sum(A ** 2, axis=1, keepdims=True)
             + np.sum(B ** 2, axis=1, keepdims=True).T
@@ -242,8 +242,6 @@ def compute_guiding_matrix(feat_s, feat_t, I_kp, J_kp, tau_s=0.1, tau_t=0.1):
     C_tt = C_tt / (C_tt.max() + 1e-10)
 
     # Relation of each source point to each source keypoint: (m, U)
-    # The -2* factor matches the original KPG-RL implementation (utils.py):
-    #   Rs = softmax_matrix(-2 * C1_kp / tau_s)
     R_s = _softmax_rows(-2.0 * C_ss[:, I_kp] / tau_s)
 
     # Relation of each target point to each target keypoint: (n, U)
@@ -294,32 +292,45 @@ def sinkhorn_kpg_log(p, q, C, Mask, reg=0.01, niter=1000, thresh=1e-9):
     return np.exp(log_kernel(u, v))
 
 
-def select_keypoints_from_batch(ys_np, pred_xt_np, class_num):
+def select_keypoints_from_batch(ys_np, pred_xt_np, class_num, conf_thresh=0.0):
     """Select paired keypoints from a source / target mini-batch.
 
     For each class c that appears in *both* the source labels and the
-    target pseudo-labels (argmax of softmax predictions), the first
-    occurrence in each is taken as the keypoint representative.
+    target pseudo-labels (argmax of softmax predictions):
+      - Source keypoint: first source sample of class c (labels are GT).
+      - Target keypoint: target sample with the HIGHEST predicted probability
+        for class c (most confident pseudo-label).  This is far more reliable
+        than picking the arbitrary first occurrence, especially early in
+        training when many pseudo-labels are wrong.
+      - When `conf_thresh > 0`, classes whose best target confidence falls
+        below the threshold are skipped — preventing wrong-class keypoints
+        from forcing the mask to push mass between true classes.
 
     Parameters
     ----------
-    ys_np      : ndarray (m,) int    source ground-truth labels
-    pred_xt_np : ndarray (n, C) float target softmax predictions
-    class_num  : int
+    ys_np       : ndarray (m,) int      source ground-truth labels
+    pred_xt_np  : ndarray (n, C) float  target softmax predictions
+    class_num   : int
+    conf_thresh : float                 min target confidence to keep a kp
 
     Returns
     -------
     I_kp : list[int]  source mini-batch indices of keypoints
     J_kp : list[int]  target mini-batch indices of keypoints (paired)
     """
-    pseudo_labels = pred_xt_np.argmax(axis=1)   # (n,)
+    pseudo_conf = pred_xt_np.max(axis=1)             # (n,)
+    pseudo_labels = pred_xt_np.argmax(axis=1)        # (n,)
     I_kp, J_kp = [], []
     for c in range(class_num):
         src_idx = np.where(ys_np == c)[0]
         tgt_idx = np.where(pseudo_labels == c)[0]
-        if len(src_idx) > 0 and len(tgt_idx) > 0:
-            I_kp.append(int(src_idx[0]))
-            J_kp.append(int(tgt_idx[0]))
+        if len(src_idx) == 0 or len(tgt_idx) == 0:
+            continue
+        best_t = int(tgt_idx[np.argmax(pseudo_conf[tgt_idx])])
+        if pseudo_conf[best_t] < conf_thresh:
+            continue
+        I_kp.append(int(src_idx[0]))
+        J_kp.append(best_t)
     return I_kp, J_kp
 
 
@@ -418,11 +429,19 @@ def solve_ot_kpg(
         # Exact masked Sinkhorn for the entropic balanced case
         return sinkhorn_kpg_log(a, b, M_kpg, Mask, reg=epsilon)
     else:
-        # Approximate: encode mask as a large additive penalty so the
-        # standard solver (EMD / unbalanced / partial) naturally avoids
-        # masked cells while remaining unmodified otherwise.
+        # Adaptive mask-penalty.  For Sinkhorn-based solvers (epsilon > 0),
+        # exp(-penalty / reg) must stay representable in float64 — otherwise
+        # 0/0 in the iterations produces NaN.  PENALTY = max(2, 50*eps)
+        # keeps exp(-PENALTY/eps) ≈ exp(-50) ≈ 2e-22, which is safely
+        # positive AND many orders of magnitude smaller than the worst
+        # legitimate kernel value, so the mask is effectively enforced.
+        # For exact LP (eps=0) any penalty > legitimate range (~1) works.
+        if epsilon > 0:
+            penalty = max(2.0, 50.0 * epsilon)
+        else:
+            penalty = 100.0
         M_masked = M_kpg.copy()
-        M_masked[Mask == 0] = M_masked.max() * 1e3 + 1.0
+        M_masked[Mask == 0] = penalty
         return solve_ot(a, b, M_masked, ot_type, epsilon, tau, mass)
 
 

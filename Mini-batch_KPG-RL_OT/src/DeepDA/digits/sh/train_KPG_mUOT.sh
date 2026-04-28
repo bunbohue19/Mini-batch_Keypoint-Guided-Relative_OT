@@ -63,6 +63,7 @@ for ENTRY in "${TASKS[@]}"; do
         --use_kpg \
         --alpha     ${ALPHA} \
         --tau_s     ${TAU_S} \
-        --tau_t     ${TAU_T}
+        --tau_t     ${TAU_T} \
+        --data_dir /home/doanpt/locnd/Mini-batch_Keypoint-Guided-Relative_OT/Mini-batch_KPG-RL_OT/data
     echo "=== Done: ${SRC} → ${TGT} ==="
 done

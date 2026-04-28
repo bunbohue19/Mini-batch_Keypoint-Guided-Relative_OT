@@ -1,0 +1,40 @@
+04/27/2026 11:31:50 AM Namespace(gpu_id='0', num_workers=8, method='jpmbot', use_bomb=False, source_ds='mnist', target_ds='usps', data_dir='/home/doanpt/locnd/Mini-batch_Keypoint-Guided-Relative_OT/Mini-batch_KPG-RL_OT/data', k=1, mbsize=500, n_epochs=100, test_interval=1, nclass=10, epsilon=0.1, batch_epsilon=0.0, tau=1.0, mass=0.85, lr=0.0004, seed=1980, eta1=0.1, eta2=0.1, use_kpg=True, alpha=0.5, tau_s=0.1, tau_t=0.1)
+04/27/2026 11:32:02 AM eta1=0.1, eta2=0.1, epsilon=0.1, use_kpg=True, alpha=0.5, tau_s=0.1, tau_t=0.1
+04/27/2026 11:32:21 AM Source accuracy is 0.9994666666666666
+04/27/2026 11:42:03 AM At epoch 0 source and test accuracies are 0.9853333333333333 and 0.4598903836571998
+04/27/2026 11:51:34 AM At epoch 1 source and test accuracies are 0.99115 and 0.4384653712007972
+04/27/2026 12:00:20 PM At epoch 2 source and test accuracies are 0.9917333333333334 and 0.4434479322371699
+04/27/2026 12:10:22 PM At epoch 3 source and test accuracies are 0.9919666666666667 and 0.40308918784255104
+04/27/2026 12:19:28 PM At epoch 4 source and test accuracies are 0.9933333333333333 and 0.3537618335824614
+04/27/2026 12:28:47 PM At epoch 5 source and test accuracies are 0.9935833333333334 and 0.4025909317389138
+04/27/2026 12:37:28 PM At epoch 6 source and test accuracies are 0.9947666666666667 and 0.43447932237169906
+04/27/2026 12:46:32 PM At epoch 7 source and test accuracies are 0.9944166666666666 and 0.4155455904334828
+04/27/2026 12:55:39 PM At epoch 8 source and test accuracies are 0.9947166666666667 and 0.484304932735426
+04/27/2026 01:05:41 PM At epoch 9 source and test accuracies are 0.9960333333333333 and 0.44892874937717986
+04/27/2026 01:13:46 PM At epoch 10 source and test accuracies are 0.9956833333333334 and 0.465869456900847
+04/27/2026 01:22:26 PM At epoch 11 source and test accuracies are 0.9959833333333333 and 0.4444444444444444
+04/27/2026 01:30:59 PM At epoch 12 source and test accuracies are 0.99605 and 0.4992526158445441
+04/27/2026 01:40:21 PM At epoch 13 source and test accuracies are 0.9966833333333334 and 0.5376183358246138
+04/27/2026 01:49:47 PM At epoch 14 source and test accuracies are 0.99615 and 0.47583457897359244
+04/27/2026 01:58:30 PM At epoch 15 source and test accuracies are 0.9973666666666666 and 0.43447932237169906
+04/27/2026 02:07:01 PM At epoch 16 source and test accuracies are 0.9976166666666667 and 0.5276532137518685
+04/27/2026 02:16:36 PM At epoch 17 source and test accuracies are 0.99815 and 0.4484304932735426
+04/27/2026 02:25:51 PM At epoch 18 source and test accuracies are 0.9983 and 0.5022421524663677
+04/27/2026 02:34:52 PM At epoch 19 source and test accuracies are 0.9975 and 0.5127055306427504
+04/27/2026 02:44:05 PM At epoch 20 source and test accuracies are 0.99715 and 0.5146985550572994
+04/27/2026 02:52:56 PM At epoch 21 source and test accuracies are 0.9982333333333333 and 0.4942700548081714
+04/27/2026 03:01:46 PM At epoch 22 source and test accuracies are 0.9981333333333333 and 0.5246636771300448
+04/27/2026 03:10:09 PM At epoch 23 source and test accuracies are 0.9981666666666666 and 0.510214250124564
+04/27/2026 03:19:45 PM At epoch 24 source and test accuracies are 0.9989166666666667 and 0.5406078724464375
+04/27/2026 03:28:30 PM At epoch 25 source and test accuracies are 0.9986166666666667 and 0.3876432486297957
+04/27/2026 03:36:51 PM At epoch 26 source and test accuracies are 0.9984833333333333 and 0.5271549576482312
+04/27/2026 03:45:41 PM At epoch 27 source and test accuracies are 0.99845 and 0.5430991529646239
+04/27/2026 03:54:30 PM At epoch 28 source and test accuracies are 0.99895 and 0.5256601893373194
+04/27/2026 04:03:41 PM At epoch 29 source and test accuracies are 0.9989333333333333 and 0.5356253114100648
+04/27/2026 04:13:07 PM At epoch 30 source and test accuracies are 0.9987333333333334 and 0.5236671649227703
+04/27/2026 04:22:31 PM At epoch 31 source and test accuracies are 0.9992333333333333 and 0.5515695067264574
+04/27/2026 04:31:42 PM At epoch 32 source and test accuracies are 0.9991 and 0.5311410064773293
+04/27/2026 04:41:08 PM At epoch 33 source and test accuracies are 0.9993166666666666 and 0.5401096163428002
+04/27/2026 04:49:51 PM At epoch 34 source and test accuracies are 0.9992333333333333 and 0.4404583956153463
+04/27/2026 04:58:46 PM At epoch 35 source and test accuracies are 0.99915 and 0.4469357249626308
+04/27/2026 05:07:40 PM At epoch 36 source and test accuracies are 0.9993833333333333 and 0.47234678624813153

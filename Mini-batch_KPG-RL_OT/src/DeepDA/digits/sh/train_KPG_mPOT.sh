@@ -1,33 +1,32 @@
 #!/bin/bash
-# KPG-RL + mini-batch OT (balanced, exact EMD) on digits datasets
+# KPG-RL + mini-batch POT (partial OT) on digits datasets
 #
-# Runs all 3 adaptation tasks from Table 1 of the m-POT paper:
-#   SVHN→MNIST, USPS→MNIST, MNIST→USPS
-#
-# Hyperparameters follow the baseline exp_mOT.sh (eta1=0.1, eta2=0.1,
-# lr=4e-4, m=500, k=1, epsilon=0) plus KPG-RL defaults (alpha=0.5,
-# tau_s=0.1, tau_t=0.1).
+# Per-task MASS values follow the m-POT paper (Nguyen et al., ICML 2022),
+# Appendix D.1, "Parameter settings for Digits datasets":
+#   SVHN  → MNIST  : s = 0.85
+#   USPS  → MNIST  : s = 0.90
+#   MNIST → USPS   : s = 0.80
+# Other hyperparameters (epsilon=0.1, lr=4e-4, m=500, k=1) match the baseline.
 #
 # Usage:
 #   cd Mini-batch_KPG-RL_OT/src/DeepDA/digits
-#   bash sh/exp_KPG_mOT.sh
+#   bash sh/train_KPG_mPOT.sh
 
 set -e
 GPU=${1:-0}
 export CUDA_VISIBLE_DEVICES=${GPU}
 echo "Using GPU ${GPU}"
 
-METHOD=jdot         # balanced OT
+METHOD=jpmbot       # partial OT
 K=1
 M=500
 EPOCH=100
 TEST_INTERVAL=1
 CLASS=10
-EPSILON=0.0         # exact EMD
+EPSILON=0.1         # entropic regularization
 TAU=1.0
 ETA1=0.1
 ETA2=0.1
-MASS=0.85
 LR=4e-4
 SEED=1980
 
@@ -36,16 +35,17 @@ ALPHA=0.5
 TAU_S=0.1
 TAU_T=0.1
 
+# Per-task settings: "<source>  <target>  <mass>"
 TASKS=(
-    "svhn   mnist"
-    "usps   mnist"
-    "mnist  usps"
+    "svhn   mnist  0.85"
+    "usps   mnist  0.90"
+    "mnist  usps   0.80"
 )
 
 for ENTRY in "${TASKS[@]}"; do
-    read -r SRC TGT <<< "${ENTRY}"
+    read -r SRC TGT MASS <<< "${ENTRY}"
     echo ""
-    echo "=== ${SRC} → ${TGT}  (KPG + mOT) ==="
+    echo "=== ${SRC} → ${TGT}  (KPG + mPOT, mass=${MASS}) ==="
     python train_digits.py \
         --gpu_id    ${GPU} \
         --method    ${METHOD} \
@@ -67,6 +67,7 @@ for ENTRY in "${TASKS[@]}"; do
         --use_kpg \
         --alpha     ${ALPHA} \
         --tau_s     ${TAU_S} \
-        --tau_t     ${TAU_T}
+        --tau_t     ${TAU_T} \
+        --data_dir /home/doanpt/locnd/Mini-batch_Keypoint-Guided-Relative_OT/Mini-batch_KPG-RL_OT/data
     echo "=== Done: ${SRC} → ${TGT} ==="
 done
