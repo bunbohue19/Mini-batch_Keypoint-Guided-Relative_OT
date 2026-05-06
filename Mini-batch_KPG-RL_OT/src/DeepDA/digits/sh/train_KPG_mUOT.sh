@@ -28,7 +28,7 @@ LR=4e-4
 SEED=1980
 
 # KPG-RL parameters
-ALPHA=0.5
+ALPHA=0.6
 TAU_S=0.1
 TAU_T=0.1
 

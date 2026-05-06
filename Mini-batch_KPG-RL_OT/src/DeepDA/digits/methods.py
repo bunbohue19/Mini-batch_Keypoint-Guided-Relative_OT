@@ -160,7 +160,8 @@ def _solve_ot(a, b, C_np, method, epsilon, tau, mass):
 def _solve_ot_kpg(a, b, C_np, method, epsilon, tau, mass,
                    feat_s, feat_t, ys_np, pred_xt_np, n_class,
                    tau_s, tau_t, alpha):
-    """OT with KPG-RL-KP keypoint guidance.
+    """
+    OT with KPG-RL-KP keypoint guidance.
 
     Blending: cost = alpha * C_norm + (1-alpha) * G,  with M_kpg in [0, ~1].
     G is NOT normalised (JSD is naturally bounded in [0, ln2]).

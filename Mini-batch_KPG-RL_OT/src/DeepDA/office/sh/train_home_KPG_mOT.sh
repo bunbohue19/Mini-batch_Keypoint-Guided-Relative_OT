@@ -18,7 +18,7 @@ LIST_DIR="${DATA_ROOT}/office-home"
 
 # ── Hyper-parameters ───────────────────────────────────────────────────────
 GPU=2
-OT_TYPE=unbalanced
+OT_TYPE=partial
 NET=ResNet50
 EPSILON=0.01       # unbalanced OT requires epsilon > 0 for Sinkhorn;
                    # 0.01 follows the m-UOT paper (Appendix D.1)
