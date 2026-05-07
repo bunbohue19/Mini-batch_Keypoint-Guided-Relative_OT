@@ -146,6 +146,8 @@ Baselines/KPG-RL/**/snapshot/
 # Other files
 home_*.txt
 *.pth
+*.tar
+*.pth.tar
 *.npy
 *.bmp
 *.pdf
