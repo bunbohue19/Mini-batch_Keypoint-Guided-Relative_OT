@@ -1,0 +1,8 @@
+Namespace(gpu_id='0', s=0, t=1, output='mkpot_k1_m65_mass0.5_a0.5', seed=2020, max_iterations=5000, batch_size=65, worker=4, net='ResNet50', dset='office_home', test_interval=500, lr=0.001, ot_type='pot', eta1=0.003, eta2=0.75, eta3=10.0, epsilon=0.01, tau=0.06, mass=0.5, k=1, use_kpg=True, alpha=0.5, tau_s=0.5, tau_t=0.5, n_shared_classes=25, class_num=65, s_dset_path='/home/doanpt/locnd/Mini-batch_Keypoint-Guided-Relative_OT/Mini-batch_KPG-RL_OT/src/PartialDA/data/office_home/Art_list.txt', t_dset_path='/home/doanpt/locnd/Mini-batch_Keypoint-Guided-Relative_OT/Mini-batch_KPG-RL_OT/src/PartialDA/data/office_home/Clipart_25_list.txt', name='AC', output_dir='snapshot/AC/mkpot_k1_m65_mass0.5_a0.5', out_file=<_io.TextIOWrapper name='snapshot/AC/mkpot_k1_m65_mass0.5_a0.5/log.txt' mode='w' encoding='UTF-8'>)
+--------------------------------------------------
+ eta1 = 0.003, eta2 = 0.750, eta3 = 10.000
+ ot_type = pot, epsilon = 0.0100, tau = 0.0600, mass = 0.500
+ use_kpg = True, alpha = 0.500, tau_s = 0.500, tau_t = 0.500
+ n_shared_classes = 25 / class_num = 65
+
+AC, iter: 00000, source/target: 65/65

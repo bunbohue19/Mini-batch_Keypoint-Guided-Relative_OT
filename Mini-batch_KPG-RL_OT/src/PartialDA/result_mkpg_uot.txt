@@ -1,0 +1,12 @@
+method AC_mkuot_k1_m65_a0.5, iter: 00500, precision: 0.25441
+method AP_mkuot_k1_m65_a0.5, iter: 01500, precision: 0.30945
+method AR_mkuot_k1_m65_a0.5, iter: 00500, precision: 0.37283
+method CA_mkuot_k1_m65_a0.5, iter: 01000, precision: 0.21809
+method CP_mkuot_k1_m65_a0.5, iter: 01500, precision: 0.26610
+method CR_mkuot_k1_m65_a0.5, iter: 00500, precision: 0.32775
+method PA_mkuot_k1_m65_a0.5, iter: 01500, precision: 0.22021
+method PC_mkuot_k1_m65_a0.5, iter: 00500, precision: 0.24189
+method PR_mkuot_k1_m65_a0.5, iter: 00500, precision: 0.32023
+method RA_mkuot_k1_m65_a0.5, iter: 00500, precision: 0.29362
+method RC_mkuot_k1_m65_a0.5, iter: 00500, precision: 0.25327
+method RP_mkuot_k1_m65_a0.5, iter: 00500, precision: 0.34919

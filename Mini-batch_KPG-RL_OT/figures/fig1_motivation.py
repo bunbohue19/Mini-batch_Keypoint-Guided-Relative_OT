@@ -57,9 +57,9 @@ labels_t_all = np.array(labels_t_all)
 
 # Mini-batch: deliberately uneven sampling to lose cluster structure.
 # The imbalance forces OT to create cross-class matches.
-# Class 0: 10 source, 3 target  → big surplus source
-# Class 1:  3 source, 10 target → big deficit source
-# Class 2:  3 source, 3 target  → balanced but sparse
+# Class 0: 5 source, 5 target  → big surplus source
+# Class 1:  5 source, 5 target → big deficit source
+# Class 2:  5 source, 5 target  → balanced but sparse
 # This gives mOT ≈ 56%, mPOT ≈ 77% — mPOT helps but is still imperfect.
 np.random.seed(1)
 mb_s_idx, mb_t_idx = [], []

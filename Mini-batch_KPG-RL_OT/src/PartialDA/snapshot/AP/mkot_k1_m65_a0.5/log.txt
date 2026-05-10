@@ -1,0 +1,90 @@
+Namespace(gpu_id='0', s=0, t=2, output='mkot_k1_m65_a0.5', seed=2020, max_iterations=5000, batch_size=65, worker=4, net='ResNet50', dset='office_home', test_interval=500, lr=0.001, ot_type='ot', eta1=0.001, eta2=0.0001, eta3=1.0, epsilon=0.01, tau=0.06, mass=0.65, k=1, use_kpg=True, alpha=0.5, tau_s=0.5, tau_t=0.5, n_shared_classes=25, class_num=65, s_dset_path='/home/doanpt/locnd/Mini-batch_Keypoint-Guided-Relative_OT/Mini-batch_KPG-RL_OT/src/PartialDA/data/office_home/Art_list.txt', t_dset_path='/home/doanpt/locnd/Mini-batch_Keypoint-Guided-Relative_OT/Mini-batch_KPG-RL_OT/src/PartialDA/data/office_home/Product_25_list.txt', name='AP', output_dir='snapshot/AP/mkot_k1_m65_a0.5', out_file=<_io.TextIOWrapper name='snapshot/AP/mkot_k1_m65_a0.5/log.txt' mode='w' encoding='UTF-8'>)
+--------------------------------------------------
+ eta1 = 0.001, eta2 = 0.000, eta3 = 1.000
+ ot_type = ot, epsilon = 0.0100, tau = 0.0600, mass = 0.650
+ use_kpg = True, alpha = 0.500, tau_s = 0.500, tau_t = 0.500
+ n_shared_classes = 25 / class_num = 65
+
+AP, iter: 00000, source/target: 65/65
+sum(pi)=1.0000, transfer=0.1108, adap_mass=0.010, kps=6
+sum(pi)=1.0000, transfer=0.1756, adap_mass=0.036, kps=22
+sum(pi)=1.0000, transfer=0.1676, adap_mass=0.062, kps=19
+sum(pi)=1.0000, transfer=0.1470, adap_mass=0.088, kps=21
+sum(pi)=1.0000, transfer=0.1407, adap_mass=0.114, kps=20
+iter: 00500, precision: 0.60446
+
+AP, iter: 00500, source/target: 65/65
+sum(pi)=1.0000, transfer=0.1266, adap_mass=0.140, kps=22
+sum(pi)=1.0000, transfer=0.1257, adap_mass=0.166, kps=19
+sum(pi)=1.0000, transfer=0.1088, adap_mass=0.192, kps=20
+sum(pi)=1.0000, transfer=0.1091, adap_mass=0.218, kps=21
+sum(pi)=1.0000, transfer=0.0988, adap_mass=0.244, kps=22
+iter: 01000, precision: 0.60927
+
+AP, iter: 01000, source/target: 65/65
+sum(pi)=1.0000, transfer=0.0978, adap_mass=0.270, kps=20
+sum(pi)=1.0000, transfer=0.0965, adap_mass=0.296, kps=16
+sum(pi)=1.0000, transfer=0.0907, adap_mass=0.322, kps=23
+sum(pi)=1.0000, transfer=0.0903, adap_mass=0.348, kps=23
+sum(pi)=1.0000, transfer=0.0825, adap_mass=0.374, kps=18
+iter: 01500, precision: 0.61288
+
+AP, iter: 01500, source/target: 65/65
+sum(pi)=1.0000, transfer=0.0898, adap_mass=0.400, kps=22
+sum(pi)=1.0000, transfer=0.0752, adap_mass=0.426, kps=21
+sum(pi)=1.0000, transfer=0.0817, adap_mass=0.452, kps=21
+sum(pi)=1.0000, transfer=0.0762, adap_mass=0.478, kps=19
+sum(pi)=1.0000, transfer=0.0775, adap_mass=0.504, kps=20
+iter: 02000, precision: 0.62432
+
+AP, iter: 02000, source/target: 65/65
+sum(pi)=1.0000, transfer=0.0756, adap_mass=0.530, kps=18
+sum(pi)=1.0000, transfer=0.0741, adap_mass=0.556, kps=20
+sum(pi)=1.0000, transfer=0.0698, adap_mass=0.582, kps=24
+sum(pi)=1.0000, transfer=0.0715, adap_mass=0.608, kps=21
+sum(pi)=1.0000, transfer=0.0690, adap_mass=0.634, kps=21
+iter: 02500, precision: 0.62613
+
+AP, iter: 02500, source/target: 65/65
+sum(pi)=1.0000, transfer=0.0675, adap_mass=0.650, kps=20
+sum(pi)=1.0000, transfer=0.0670, adap_mass=0.650, kps=20
+sum(pi)=1.0000, transfer=0.0707, adap_mass=0.650, kps=24
+sum(pi)=1.0000, transfer=0.0648, adap_mass=0.650, kps=19
+sum(pi)=1.0000, transfer=0.0674, adap_mass=0.650, kps=19
+iter: 03000, precision: 0.62252
+
+AP, iter: 03000, source/target: 65/65
+sum(pi)=1.0000, transfer=0.0619, adap_mass=0.650, kps=19
+sum(pi)=1.0000, transfer=0.0634, adap_mass=0.650, kps=22
+sum(pi)=1.0000, transfer=0.0640, adap_mass=0.650, kps=21
+sum(pi)=1.0000, transfer=0.0625, adap_mass=0.650, kps=23
+sum(pi)=1.0000, transfer=0.0618, adap_mass=0.650, kps=22
+iter: 03500, precision: 0.63275
+
+AP, iter: 03500, source/target: 65/65
+sum(pi)=1.0000, transfer=0.0628, adap_mass=0.650, kps=22
+sum(pi)=1.0000, transfer=0.0592, adap_mass=0.650, kps=24
+sum(pi)=1.0000, transfer=0.0598, adap_mass=0.650, kps=19
+sum(pi)=1.0000, transfer=0.0604, adap_mass=0.650, kps=23
+sum(pi)=1.0000, transfer=0.0586, adap_mass=0.650, kps=22
+iter: 04000, precision: 0.62252
+
+AP, iter: 04000, source/target: 65/65
+sum(pi)=1.0000, transfer=0.0608, adap_mass=0.650, kps=21
+sum(pi)=1.0000, transfer=0.0559, adap_mass=0.650, kps=22
+sum(pi)=1.0000, transfer=0.0648, adap_mass=0.650, kps=23
+sum(pi)=1.0000, transfer=0.0572, adap_mass=0.650, kps=22
+sum(pi)=1.0000, transfer=0.0549, adap_mass=0.650, kps=21
+iter: 04500, precision: 0.63034
+
+AP, iter: 04500, source/target: 65/65
+sum(pi)=1.0000, transfer=0.0599, adap_mass=0.650, kps=22
+sum(pi)=1.0000, transfer=0.0556, adap_mass=0.650, kps=21
+sum(pi)=1.0000, transfer=0.0559, adap_mass=0.650, kps=23
+sum(pi)=1.0000, transfer=0.0524, adap_mass=0.650, kps=22
+sum(pi)=1.0000, transfer=0.0565, adap_mass=0.650, kps=21
+iter: 05000, precision: 0.62914
+
+AP, iter: 05000, source/target: 65/65
+sum(pi)=1.0000, transfer=0.0579, adap_mass=0.650, kps=20
+Acc: 63.28
