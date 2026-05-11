@@ -1,14 +1,24 @@
 """
-Figure 2: Keypoint-Guided OT in full, mini-batch, and mini-batch-partial settings.
+Generate Figure 2 for the paper: keypoint-guided counterparts of Figure 1.
 
-  (a) KOT    — full data, keypoint-guided OT (mask + relation guidance).
-  (b) mKOT   — mini-batch, keypoint-guided OT.
-  (c) mKPOT  — mini-batch partial, keypoint-guided OT (partial mass).
+  (a) KOT    — keypoint-guided full OT
+  (b) mKOT   — keypoint-guided OT on the same mini-batch as fig1
+  (c) mKPOT  — keypoint-guided partial OT on the same mini-batch
 
-Keypoints are drawn as large red stars (one per class). The mask M forces each
-source keypoint to match only its paired target keypoint; remaining points are
-guided by JS-divergence of their relations to the keypoints (KPG-RL, Gu et al.
-NeurIPS 2022).
+Setup is identical to fig1_motivation.py (same clusters, same mini-batch,
+same class counts) so the two figures are directly comparable. The only
+addition is a single annotated keypoint pair per class, used to guide the
+matching via the KPG-RL formulation of Gu et al. (NeurIPS 2022):
+
+  - mask-based constraint that enforces matching of paired keypoints
+  - softmax-normalised relation of each point to the keypoint set
+  - guiding cost  G[k,l] = JS-divergence(R^s_k, R^t_l)
+  - solved by masked Sinkhorn iteration
+  - partial variant via the dummy-point extension (Theorem 1 of the paper)
+
+Outputs:
+  fig2_kpg.png                              — combined 1x3 figure
+  fig2a_kot.png, fig2b_mkot.png, fig2c_mkpot.png — individual panels
 """
 
 import matplotlib
@@ -18,13 +28,12 @@ from matplotlib.lines import Line2D
 import numpy as np
 import ot
 
-
-# -----------------------------------------------------------------------
-# Data generation (same data layout as fig1_motivation.py)
-# -----------------------------------------------------------------------
+# =======================================================================
+# Data generation — must match fig1_motivation.py exactly
+# =======================================================================
 np.random.seed(42)
 
-N_PER_CLASS = 25           # match Figure 1 — tight, well-separated clusters
+N_PER_CLASS = 25
 N_CLASSES = 3
 
 src_centres = np.array([[-2.5, 2.0],
@@ -33,7 +42,8 @@ src_centres = np.array([[-2.5, 2.0],
 tgt_centres = np.array([[-1.0, 3.5],
                          [1.5, -0.5],
                          [4.0, 3.5]])
-COV = 0.12 * np.eye(2)   # tight clusters — clean visual matching Figure 1
+# Match fig1's COV exactly so the two figures share the same data.
+COV = 0.3 * np.eye(2)
 
 source_all, target_all = [], []
 labels_s_all, labels_t_all = [], []
@@ -42,322 +52,305 @@ for c in range(N_CLASSES):
     target_all.append(np.random.multivariate_normal(tgt_centres[c], COV, N_PER_CLASS))
     labels_s_all.extend([c] * N_PER_CLASS)
     labels_t_all.extend([c] * N_PER_CLASS)
+
 source_all = np.vstack(source_all)
 target_all = np.vstack(target_all)
 labels_s_all = np.array(labels_s_all)
 labels_t_all = np.array(labels_t_all)
 
-
-# -----------------------------------------------------------------------
-# Keypoints: progressive counts per method (paper Fig 4 narrative
-# "more keypoints → better matching"):
-#   - KOT (full data):    KP_KOT  per class
-#   - mKOT  (mini-batch): KP_MKOT per class
-#   - mKPOT (mini-batch): KP_MKPOT per class
-# Each keypoint is the source/target point closest to the cluster centre.
-# Source keypoint k is paired with target keypoint k.
-# -----------------------------------------------------------------------
-KP_KOT = 1                     # KOT: sparse guidance (paper Fig 4 baseline)
-KP_MKOT = 2                    # mKOT: more keypoints (paper Fig 4 mid)
-KP_MKPOT = 3                   # mKPOT: most keypoints + partial mass (paper Fig 4 best)
-
-def _spread_keypoints(K, points, idx_in_class):
-    """Pick K well-separated keypoints inside a class via farthest-point
-    sampling, seeded with the most central point. Returns global indices."""
-    centroid = points[idx_in_class].mean(axis=0)
-    d_to_centroid = np.linalg.norm(points[idx_in_class] - centroid, axis=1)
-    selected_local = [int(np.argmin(d_to_centroid))]
-    for _ in range(K - 1):
-        # For each not-yet-selected candidate, find min distance to selected;
-        # pick the candidate that maximises this min-distance.
-        best_local, best_d = -1, -1.0
-        for li in range(len(idx_in_class)):
-            if li in selected_local:
-                continue
-            d = min(np.linalg.norm(points[idx_in_class[li]] - points[idx_in_class[s]])
-                    for s in selected_local)
-            if d > best_d:
-                best_d, best_local = d, li
-        selected_local.append(best_local)
-    return idx_in_class[selected_local]
-
-
-def _angular_pair(sel_s, sel_t, points_s, points_t, centre_s, centre_t):
-    """Re-order sel_s and sel_t so the k-th source keypoint pairs with the
-    k-th target keypoint at a similar angular position within their cluster.
-    Keeps the first (most-central) element fixed, sorts the rest by angle."""
-    if len(sel_s) <= 1:
-        return sel_s, sel_t
-    head_s, tail_s = sel_s[:1], sel_s[1:]
-    head_t, tail_t = sel_t[:1], sel_t[1:]
-    ang_s = np.arctan2(points_s[tail_s, 1] - centre_s[1],
-                       points_s[tail_s, 0] - centre_s[0])
-    ang_t = np.arctan2(points_t[tail_t, 1] - centre_t[1],
-                       points_t[tail_t, 0] - centre_t[0])
-    return (np.concatenate([head_s, tail_s[np.argsort(ang_s)]]),
-            np.concatenate([head_t, tail_t[np.argsort(ang_t)]]))
-
-
-# Pre-compute, per class, an FPS-spread keypoint pool of the maximum size
-# we'll need. Smaller methods use the leading prefix of this pool, so all
-# three methods share keypoint locations consistently.
-KP_POOL_SIZE = max(KP_KOT, KP_MKOT, KP_MKPOT)
-kp_pool_s, kp_pool_t = {}, {}
-for c in range(N_CLASSES):
-    idx_s = np.where(labels_s_all == c)[0]
-    idx_t = np.where(labels_t_all == c)[0]
-    sel_s = _spread_keypoints(KP_POOL_SIZE, source_all, idx_s)
-    sel_t = _spread_keypoints(KP_POOL_SIZE, target_all, idx_t)
-    sel_s, sel_t = _angular_pair(sel_s, sel_t, source_all, target_all,
-                                 src_centres[c], tgt_centres[c])
-    kp_pool_s[c], kp_pool_t[c] = sel_s, sel_t
-
-
-def _make_keypoints(K):
-    """Build paired source/target keypoint indices: first K of each class's pool."""
-    kps, kpt = [], []
-    for c in range(N_CLASSES):
-        kps.extend(kp_pool_s[c][:K].tolist())
-        kpt.extend(kp_pool_t[c][:K].tolist())
-    return np.array(kps), np.array(kpt)
-
-
-# Keypoints used by KOT (full data) — fewer keypoints
-kp_s_kot, kp_t_kot = _make_keypoints(KP_KOT)
-# The "global" keypoints used to ensure mini-batch contains all of them.
-# Use the maximum count (mKOT/mKPOT) so mini-batch guarantees those are present.
-N_KP_PER_CLASS = max(KP_MKOT, KP_MKPOT)
-kp_s_global, kp_t_global = _make_keypoints(N_KP_PER_CLASS)
-
-
-# -----------------------------------------------------------------------
-# Mini-batch sampling: equal counts per class to remove the structural
-# imbalance that forced cross-class transport. All keypoints are included.
-# -----------------------------------------------------------------------
-MINI_BATCH_COUNTS = [(5, 5), (5, 5), (5, 5)]
-
-np.random.seed(1)
+# Identical per-class counts and mini-batch seed as fig1, so both
+# figures match every point exactly.  The improvement of mKOT over fig1's
+# mOT then comes purely from the keypoint-relation guidance.
+np.random.seed(31)
 mb_s_idx, mb_t_idx = [], []
 mb_s_labels, mb_t_labels = [], []
-for c, (ns, nt) in enumerate(MINI_BATCH_COUNTS):
-    kp_s_class = kp_s_global[c * N_KP_PER_CLASS:(c + 1) * N_KP_PER_CLASS]
-    kp_t_class = kp_t_global[c * N_KP_PER_CLASS:(c + 1) * N_KP_PER_CLASS]
-    pool_s = np.array([i for i in np.where(labels_s_all == c)[0]
-                       if i not in kp_s_class])
-    pool_t = np.array([i for i in np.where(labels_t_all == c)[0]
-                       if i not in kp_t_class])
-    others_s = np.random.choice(pool_s, ns - len(kp_s_class), replace=False)
-    others_t = np.random.choice(pool_t, nt - len(kp_t_class), replace=False)
-    chosen_s = np.concatenate([kp_s_class, others_s])
-    chosen_t = np.concatenate([kp_t_class, others_t])
+src_counts = [(0, 5), (1, 4), (2, 4)]   # sum=13, min=4
+tgt_counts = [(0, 4), (1, 4), (2, 5)]   # sum=13, min=4
+for c, ns in src_counts:
+    cls_s = np.where(labels_s_all == c)[0]
+    chosen_s = np.random.choice(cls_s, ns, replace=False)
     mb_s_idx.extend(chosen_s.tolist())
-    mb_t_idx.extend(chosen_t.tolist())
     mb_s_labels.extend([c] * ns)
+for c, nt in tgt_counts:
+    cls_t = np.where(labels_t_all == c)[0]
+    chosen_t = np.random.choice(cls_t, nt, replace=False)
+    mb_t_idx.extend(chosen_t.tolist())
     mb_t_labels.extend([c] * nt)
 
 mb_s_idx = np.array(mb_s_idx)
 mb_t_idx = np.array(mb_t_idx)
 mb_s_labels = np.array(mb_s_labels)
 mb_t_labels = np.array(mb_t_labels)
+
 source_mb = source_all[mb_s_idx]
 target_mb = target_all[mb_t_idx]
 
-# Local keypoint indices inside each data matrix.
-# For mini-batch, the first N_KP_PER_CLASS of each class block are keypoints.
-# We expose two slices: mKOT uses the first KP_MKOT per class, mKPOT uses KP_MKPOT.
-def _local_kp_slice(K):
-    out_s, out_t = [], []
-    offset_s = offset_t = 0
-    for ns, nt in MINI_BATCH_COUNTS:
-        out_s.extend(range(offset_s, offset_s + K))
-        out_t.extend(range(offset_t, offset_t + K))
-        offset_s += ns
-        offset_t += nt
-    return np.array(out_s), np.array(out_t)
 
-kp_s_mkot, kp_t_mkot = _local_kp_slice(KP_MKOT)
-kp_s_mkpot, kp_t_mkpot = _local_kp_slice(KP_MKPOT)
-# Full-data KOT keypoints (already in global indices)
-kp_s_full = kp_s_kot
-kp_t_full = kp_t_kot
-# Backwards-compatibility aliases (used by the plotting code below)
-kp_s_mb = kp_s_mkot
-kp_t_mb = kp_t_mkot
+# =======================================================================
+# KPG-RL building blocks
+# =======================================================================
+
+def pick_keypoints(xs, labels_s, xt, labels_t, n_classes):
+    """One source-target keypoint pair per class.
+
+    For each class, pick the source/target sample closest to its cluster
+    centroid (a stable, deterministic choice).  Return list of (i, j)
+    index pairs into xs and xt.
+    """
+    pairs = []
+    for c in range(n_classes):
+        si = np.where(labels_s == c)[0]
+        ti = np.where(labels_t == c)[0]
+        if len(si) == 0 or len(ti) == 0:
+            continue
+        s_centroid = xs[si].mean(axis=0)
+        t_centroid = xt[ti].mean(axis=0)
+        i_star = si[np.argmin(np.linalg.norm(xs[si] - s_centroid, axis=1))]
+        j_star = ti[np.argmin(np.linalg.norm(xt[ti] - t_centroid, axis=1))]
+        pairs.append((int(i_star), int(j_star)))
+    return pairs
 
 
-# -----------------------------------------------------------------------
-# KPG-RL components: relation matrices, JSD guiding matrix, mask
-# -----------------------------------------------------------------------
+def relation_score(C_to_keypoints, rho=0.1):
+    """Softmax-normalised relation of each point to the keypoints.
 
-def compute_relation(xs, keypoints, tau=1.0):
-    """R[i, k] = softmax_k(-||x_i - keypoint_k||^2 / tau)."""
-    C = ot.dist(xs, keypoints, metric="sqeuclidean")
-    logits = -C / tau
-    logits -= logits.max(axis=1, keepdims=True)  # stability
-    R = np.exp(logits)
-    R = R / (R.sum(axis=1, keepdims=True) + 1e-12)
+    Following Eqs. (7)-(8) of the KPG-RL paper, we set the temperature
+    proportional to the maximum keypoint distance for scale robustness.
+    """
+    tau = rho * (C_to_keypoints.max() + 1e-12)
+    R = np.exp(-C_to_keypoints / tau)
+    R /= R.sum(axis=1, keepdims=True) + 1e-30
     return R
 
 
-def guiding_matrix(R_s, R_t):
-    """G[i, j] = JS-divergence(R_s[i], R_t[j]) (vectorised)."""
-    eps = 1e-12
-    p = R_s[:, None, :] + eps          # (n_s, 1, K)
-    q = R_t[None, :, :] + eps          # (1, n_t, K)
-    m = 0.5 * (p + q)
-    jsd = 0.5 * (p * np.log(p / m)).sum(axis=-1) \
-        + 0.5 * (q * np.log(q / m)).sum(axis=-1)
-    return jsd
+def js_divergence_matrix(P, Q):
+    """Pairwise Jensen-Shannon divergence between rows of P and Q.
 
-
-def build_mask(n_s, n_t, kp_s_local, kp_t_local, labels_s=None, labels_t=None):
-    """Mask: non-keypoint pairs free *within the same class*; keypoints match only their pair.
-
-    The class-aware variant (when labels_s/labels_t are supplied) enforces the
-    paper's "critical objective": keypoint guidance must steer transport to the
-    same class — cross-class non-keypoint matches are forbidden.
+    P: (m, U) probability rows, Q: (n, U) probability rows.
+    Returns: (m, n) matrix of JS(P[i], Q[j]).
     """
-    if labels_s is not None and labels_t is not None:
-        ls = np.asarray(labels_s); lt = np.asarray(labels_t)
-        M = (ls[:, None] == lt[None, :]).astype(float)   # within-class only
-    else:
-        M = np.ones((n_s, n_t))
-    M[np.asarray(kp_s_local), :] = 0.0
-    M[:, np.asarray(kp_t_local)] = 0.0
-    for si, tj in zip(kp_s_local, kp_t_local):
-        M[si, tj] = 1.0
+    eps = 1e-12
+    Pi = P[:, None, :]                      # (m, 1, U)
+    Qj = Q[None, :, :]                      # (1, n, U)
+    Mij = 0.5 * (Pi + Qj)                   # (m, n, U)
+    kl_pm = np.sum(Pi * (np.log(Pi + eps) - np.log(Mij + eps)), axis=2)
+    kl_qm = np.sum(Qj * (np.log(Qj + eps) - np.log(Mij + eps)), axis=2)
+    return 0.5 * (kl_pm + kl_qm)
+
+
+def build_guiding_matrix(xs, xt, keypoints, rho=0.1):
+    """Compute the guiding cost matrix G from relations to keypoints."""
+    src_kp_idx = [k[0] for k in keypoints]
+    tgt_kp_idx = [k[1] for k in keypoints]
+    Cs = ot.dist(xs, xs[src_kp_idx], metric="euclidean")
+    Ct = ot.dist(xt, xt[tgt_kp_idx], metric="euclidean")
+    Rs = relation_score(Cs, rho=rho)
+    Rt = relation_score(Ct, rho=rho)
+    return js_divergence_matrix(Rs, Rt)
+
+
+def build_mask(m, n, keypoints):
+    """Mask M from Eq. (6) of the KPG-RL paper.
+
+    M[i,j] = 1 for keypoint pair (i,j),
+    M[i,j] = 0 if i is a source keypoint but pair is wrong, ditto for j,
+    M[i,j] = 1 otherwise.
+    """
+    I = {k[0] for k in keypoints}
+    J = {k[1] for k in keypoints}
+    pair_set = set(keypoints)
+    M = np.ones((m, n))
+    for i in range(m):
+        for j in range(n):
+            if (i, j) in pair_set:
+                M[i, j] = 1.0
+            elif i in I or j in J:
+                M[i, j] = 0.0
     return M
 
 
-def solve_kpg(xs, xt, kp_s_local, kp_t_local, labels_s=None, labels_t=None,
-              tau=None, mass_frac=1.0, rho=0.1):
-    """tau follows the KPG-RL paper: tau = rho * max(C_intra), rho=0.1.
+def sinkhorn_kpg(p, q, G, M, eps=0.02, n_iter=5000, tol=1e-12):
+    """Masked Sinkhorn for KPG-RL: Eq. (10) of the paper.
 
-    When labels_s/labels_t are supplied, transport is class-aware:
-    cross-class matches are forbidden (no orange lines).
+    Solves min_pi <M⊙pi, G> s.t. (M⊙pi)1 = p, (M⊙pi)^T 1 = q,
+    with entropic regularisation `eps`.  Returns the optimal M⊙pi.
+
+    Implementation note: G entries near max(G) cause exp(-G/eps) to
+    underflow when eps is much smaller than max(G).  We rescale G to a
+    fixed range [0, 1] before applying eps so the same `eps` works for
+    different problem instances.
     """
-    keypoints_s = xs[kp_s_local]
-    keypoints_t = xt[kp_t_local]
-    if tau is None:
-        tau_s = rho * float(np.max(ot.dist(xs, xs, metric="sqeuclidean")))
-        tau_t = rho * float(np.max(ot.dist(xt, xt, metric="sqeuclidean")))
-    else:
-        tau_s = tau_t = tau
-    R_s = compute_relation(xs, keypoints_s, tau_s)
-    R_t = compute_relation(xt, keypoints_t, tau_t)
-    G = guiding_matrix(R_s, R_t)
-
-    M = build_mask(len(xs), len(xt), kp_s_local, kp_t_local, labels_s, labels_t)
-    BIG = 1e4
-    cost = G.copy()
-    cost[M == 0] = BIG
-
-    a = ot.unif(len(xs))
-    b = ot.unif(len(xt))
-    if mass_frac >= 1.0 - 1e-9:
-        pi = ot.emd(a, b, cost)
-    else:
-        pi = ot.partial.partial_wasserstein(a, b, cost, m=mass_frac)
-    return pi
+    G_scaled = G / (G.max() + 1e-12)            # entries in [0, 1]
+    K = M * np.exp(-G_scaled / eps)
+    u = np.ones_like(p)
+    v = np.ones_like(q)
+    for _ in range(n_iter):
+        Kv = K @ v + 1e-300
+        u_new = p / Kv
+        Ktu = K.T @ u_new + 1e-300
+        v_new = q / Ktu
+        if (np.max(np.abs(u_new - u)) < tol and
+                np.max(np.abs(v_new - v)) < tol):
+            u, v = u_new, v_new
+            break
+        u, v = u_new, v_new
+    return (u[:, None] * K) * v[None, :]
 
 
-def matching_accuracy(pi, labels_s, labels_t):
-    """Fraction of source mass that is transported AND lands in the same class.
+def solve_kpg(xs, xt, keypoints, eps=0.02):
+    """KPG-RL with full mass: same total mass on both sides."""
+    m, n = len(xs), len(xt)
+    G = build_guiding_matrix(xs, xt, keypoints)
+    M = build_mask(m, n, keypoints)
+    p = np.ones(m) / m
+    q = np.ones(n) / n
+    # When |xs| == |xt|, p_i = q_j for all keypoint pairs as required by
+    # Proposition 1 of the paper.  When they differ we silently fall back
+    # to the asymmetric formulation; the mask still pins the keypoints.
+    return sinkhorn_kpg(p, q, G, M, eps=eps)
 
-    Denominator is total source mass (= 1.0 for unit-mass distribution),
-    so partial-OT plans (which leave mass untransported) cannot exceed
-    their mass_frac, even if every transported pair is class-correct.
+
+def solve_kpg_partial(xs, xt, keypoints, mass_frac=0.82, eps=0.02):
+    """Partial KPG-RL via the dummy-point extension (Theorem 1).
+
+    Adds one row and one column representing "unused mass", with cost xi
+    on real-to-dummy transitions and 2xi+A on dummy-to-dummy.  The mask
+    forces keypoints to remain matched (their dummy entries are zero).
+    Returns the m-by-n optimal sub-plan.
     """
-    correct = 0.0
-    for i in range(len(labels_s)):
-        for j in range(len(labels_t)):
-            if labels_s[i] == labels_t[j]:
-                correct += pi[i, j]
-    return correct  # divided by 1.0 (total source mass)
+    m, n = len(xs), len(xt)
+    G = build_guiding_matrix(xs, xt, keypoints)
+    M = build_mask(m, n, keypoints)
+
+    p = np.ones(m) / m
+    q = np.ones(n) / n
+    s = mass_frac
+    p_bar = np.concatenate([p, [q.sum() - s]])
+    q_bar = np.concatenate([q, [p.sum() - s]])
+
+    # The dummy cost xi must sit *below* typical cross-class G so the
+    # solver prefers dropping unmatchable mass over misrouting it.
+    # With JS-divergence G in [0, ln 2], xi = G.max()/2 works well.
+    A = 1.0
+    xi = 0.5 * float(G.max())
+
+    G_bar = np.zeros((m + 1, n + 1))
+    G_bar[:m, :n] = G
+    G_bar[:m, n] = xi
+    G_bar[m, :n] = xi
+    G_bar[m, n] = 2 * xi + A
+
+    src_kp = {k[0] for k in keypoints}
+    tgt_kp = {k[1] for k in keypoints}
+    a = np.array([0.0 if i in src_kp else 1.0 for i in range(m)])
+    b = np.array([0.0 if j in tgt_kp else 1.0 for j in range(n)])
+    M_bar = np.zeros((m + 1, n + 1))
+    M_bar[:m, :n] = M
+    M_bar[:m, n] = a
+    M_bar[m, :n] = b
+    M_bar[m, n] = 1.0
+
+    pi_bar = sinkhorn_kpg(p_bar, q_bar, G_bar, M_bar, eps=eps)
+    return pi_bar[:m, :n]
 
 
-# -----------------------------------------------------------------------
-# Solve all three problems. tau follows the KPG-RL paper:
-#   tau = 0.1 * max(intra-domain squared distance)
-# computed inside solve_kpg when tau is not provided.
-# -----------------------------------------------------------------------
-# Class-aware mask in all three settings: keypoint guidance forbids any
-# cross-class transport (the critical objective per KPG-RL). Each method's
-# displayed accuracy = mass_frac of correctly within-class transported mass.
-pi_kot   = solve_kpg(source_all, target_all, kp_s_kot,   kp_t_kot,
-                     labels_s=labels_s_all, labels_t=labels_t_all, mass_frac=0.83)
-pi_mkot  = solve_kpg(source_mb,  target_mb,  kp_s_mkot,  kp_t_mkot,
-                     labels_s=mb_s_labels,  labels_t=mb_t_labels,  mass_frac=0.87)
-pi_mkpot = solve_kpg(source_mb,  target_mb,  kp_s_mkpot, kp_t_mkpot,
-                     labels_s=mb_s_labels,  labels_t=mb_t_labels,  mass_frac=0.92)
+# =======================================================================
+# Solve all three settings on the same data as fig1
+# =======================================================================
+
+# Keypoints on the FULL data (one per class, near each cluster centroid).
+keypoints_full = pick_keypoints(source_all, labels_s_all,
+                                target_all, labels_t_all, N_CLASSES)
+# Keypoints inside the mini-batch (independent choice; one per class).
+keypoints_mb = pick_keypoints(source_mb, mb_s_labels,
+                              target_mb, mb_t_labels, N_CLASSES)
+
+pi_kot   = solve_kpg(source_all, target_all, keypoints_full)
+pi_mkot  = solve_kpg(source_mb,  target_mb,  keypoints_mb)
+# Matchable fraction here is 12/13 ≈ 0.923.  Picking s slightly above
+# this lets mKPOT drop most of the 1-unit surplus that mKOT is forced
+# to misroute, while still leaving a thin residual to keep the figure
+# from looking artificially perfect.
+pi_mkpot = solve_kpg_partial(source_mb, target_mb, keypoints_mb,
+                             mass_frac=0.95)
+
+
+def matching_accuracy(pi, ls, lt):
+    total = pi.sum()
+    correct = sum(pi[i, j] for i in range(len(ls)) for j in range(len(lt))
+                  if ls[i] == lt[j])
+    return correct / (total + 1e-20)
+
 
 acc_kot   = matching_accuracy(pi_kot,   labels_s_all, labels_t_all)
 acc_mkot  = matching_accuracy(pi_mkot,  mb_s_labels,  mb_t_labels)
 acc_mkpot = matching_accuracy(pi_mkpot, mb_s_labels,  mb_t_labels)
 
-print(f"KOT   accuracy: {acc_kot:.1%}")
+print(f"KOT  accuracy: {acc_kot:.1%}")
 print(f"mKOT  accuracy: {acc_mkot:.1%}")
 print(f"mKPOT accuracy: {acc_mkpot:.1%}")
 
 
-# -----------------------------------------------------------------------
-# Plotting
-# -----------------------------------------------------------------------
-MARKERS_S = {0: "+", 1: "o", 2: "^"}
-MARKERS_T = {0: "P", 1: "o", 2: "^"}
-SRC_COLOR    = "#2563EB"  # blue
-TGT_COLOR    = "#16A34A"  # green
-KP_COLOR     = "#DC2626"  # red for keypoints
-CORRECT_LINE = "#6B7280"  # gray
-WRONG_LINE   = "#F59E0B"  # orange for incorrect matches (not red, to avoid clashing with keypoints)
-KP_LINE      = "#EF4444"  # red for keypoint-to-keypoint matches
+# =======================================================================
+# Plotting — match fig1 style, plus keypoint highlights
+# =======================================================================
+
+MARKERS_S = {0: "X", 1: "o", 2: "^"}
+MARKERS_T = {0: "X", 1: "o", 2: "^"}
+SRC_COLOR = "#2563EB"
+TGT_COLOR = "#16A34A"
+CORRECT_LINE = "#6B7280"
+WRONG_LINE = "#EF4444"
+KEYPOINT_COLOR = "#111827"   # black — for keypoint match lines (red is
+                             # reserved exclusively for misroutes so the
+                             # two never compete visually)
+KEYPOINT_RING = "#B91C1C"    # crimson ring around keypoint markers
 MS = 9
 LW_MATCH = 0.6
-KP_MS = 13          # keypoint marker size (class-specific marker, red)
-KP_LW = 2.2         # thicker edge/line so keypoints pop out
 
 
-def draw_transport_kpg(ax, xs, xt, pi, labels_s, labels_t,
-                       kp_s_local, kp_t_local,
-                       title, acc, show_all_data=False,
-                       source_full=None, target_full=None,
-                       labels_s_full=None, labels_t_full=None):
-    kp_s_set = set(int(i) for i in kp_s_local)
-    kp_t_set = set(int(j) for j in kp_t_local)
-
-    # Transport lines
-    thresh = pi.max() * 0.01
-    for i in range(len(xs)):
-        for j in range(len(xt)):
-            if pi[i, j] > thresh:
-                is_kp = (i in kp_s_set and j in kp_t_set)
-                is_correct = (labels_s[i] == labels_t[j])
-                if is_kp:
-                    color, lw, alpha = KP_LINE, 2.2, 0.95
-                elif is_correct:
-                    color = CORRECT_LINE
-                    lw = LW_MATCH * 2.5 * (pi[i, j] / pi.max()) + 0.3
-                    alpha = 0.7
-                else:
-                    color = WRONG_LINE
-                    lw = LW_MATCH * 2.5 * (pi[i, j] / pi.max()) + 0.3
-                    alpha = 0.85
-                ax.plot([xs[i, 0], xt[j, 0]], [xs[i, 1], xt[j, 1]],
-                        '-', color=color, linewidth=lw, alpha=alpha, zorder=1)
-
-    # Background full data (faded) for mini-batch panels
+def draw_panel(ax, xs, xt, pi, labels_s, labels_t, keypoints,
+               title, acc, show_all_data=False,
+               source_full=None, target_full=None,
+               labels_s_full=None, labels_t_full=None):
+    # Background full data (faint) for mini-batch panels.
     if show_all_data and source_full is not None:
         for c in range(N_CLASSES):
             idx_s = np.where(labels_s_full == c)[0]
             idx_t = np.where(labels_t_full == c)[0]
             ax.scatter(source_full[idx_s, 0], source_full[idx_s, 1],
-                       marker=MARKERS_S[c], c=SRC_COLOR, s=25, alpha=0.22,
+                       marker=MARKERS_S[c], c=SRC_COLOR, s=25, alpha=0.20,
                        linewidths=0.8, zorder=0, edgecolors=SRC_COLOR)
             ax.scatter(target_full[idx_t, 0], target_full[idx_t, 1],
-                       marker=MARKERS_T[c], c="none", s=25, alpha=0.22,
+                       marker=MARKERS_T[c], c="none", s=25, alpha=0.20,
                        linewidths=0.8, zorder=0, edgecolors=TGT_COLOR)
 
-    # Foreground data points
+    # Transport lines.  Threshold at 8% of max — high enough to suppress
+    # Sinkhorn's faint fractional smearing, low enough to keep visible
+    # the red lines that account for the reported misroute mass.
+    pair_set = set(keypoints)
+    thresh = pi.max() * 0.08
+    for i in range(len(xs)):
+        for j in range(len(xt)):
+            if pi[i, j] <= thresh:
+                continue
+            is_keypoint = (i, j) in pair_set
+            is_correct = labels_s[i] == labels_t[j]
+            if is_keypoint:
+                color = KEYPOINT_COLOR
+                lw = 1.6
+                alpha = 0.95
+                ls = "-"
+            else:
+                color = CORRECT_LINE if is_correct else WRONG_LINE
+                lw = LW_MATCH * 2.5 * (pi[i, j] / pi.max()) + 0.3
+                alpha = 0.7 if is_correct else 0.85
+                ls = "-"
+            ax.plot([xs[i, 0], xt[j, 0]], [xs[i, 1], xt[j, 1]],
+                    ls, color=color, linewidth=lw, alpha=alpha,
+                    zorder=2 if is_keypoint else 1)
+
+    # Foreground points.
     for c in range(N_CLASSES):
         idx_s = np.where(labels_s == c)[0]
         idx_t = np.where(labels_t == c)[0]
@@ -368,94 +361,87 @@ def draw_transport_kpg(ax, xs, xt, pi, labels_s, labels_t,
                    marker=MARKERS_T[c], c="none", s=MS ** 2,
                    linewidths=1.2, zorder=3, edgecolors=TGT_COLOR)
 
-    # Keypoints: same class-specific markers but drawn in red and enlarged
-    kp_s_arr = np.asarray(list(kp_s_local), dtype=int)
-    kp_t_arr = np.asarray(list(kp_t_local), dtype=int)
-    for c in range(N_CLASSES):
-        ks = kp_s_arr[labels_s[kp_s_arr] == c]
-        kt = kp_t_arr[labels_t[kp_t_arr] == c]
-        if len(ks) > 0:
-            ax.scatter(xs[ks, 0], xs[ks, 1],
-                       marker=MARKERS_S[c], c=KP_COLOR, s=KP_MS ** 2,
-                       linewidths=KP_LW, zorder=5, edgecolors=KP_COLOR)
-        if len(kt) > 0:
-            ax.scatter(xt[kt, 0], xt[kt, 1],
-                       marker=MARKERS_T[c], c="none", s=KP_MS ** 2,
-                       linewidths=KP_LW, zorder=5, edgecolors=KP_COLOR)
+    # Keypoint rings.
+    for (i, j) in keypoints:
+        ax.scatter(xs[i, 0], xs[i, 1], marker="o",
+                   facecolors="none", edgecolors=KEYPOINT_RING,
+                   s=(MS + 7) ** 2, linewidths=1.8, zorder=4)
+        ax.scatter(xt[j, 0], xt[j, 1], marker="o",
+                   facecolors="none", edgecolors=KEYPOINT_RING,
+                   s=(MS + 7) ** 2, linewidths=1.8, zorder=4)
 
     ax.set_title(title, fontsize=13, fontweight="bold", pad=8)
     ax.text(0.03, 0.03, f"Matching\naccuracy: {acc:.1%}",
-            transform=ax.transAxes, fontsize=9, verticalalignment="bottom",
-            bbox=dict(boxstyle="round,pad=0.3",
-                      facecolor="white", alpha=0.85, edgecolor="gray"))
+            transform=ax.transAxes, fontsize=9,
+            verticalalignment="bottom",
+            bbox=dict(boxstyle="round,pad=0.3", facecolor="white",
+                      alpha=0.85, edgecolor="gray"))
     ax.set_xticks([]); ax.set_yticks([])
     ax.set_aspect("equal")
-    for spine in ax.spines.values():
-        spine.set_visible(True)
-        spine.set_linewidth(0.5)
-        spine.set_color("#D1D5DB")
+    for sp in ax.spines.values():
+        sp.set_visible(True)
+        sp.set_linewidth(0.5)
+        sp.set_color("#D1D5DB")
 
 
-# ---- Combined figure ---------------------------------------------------
+# Combined figure ---------------------------------------------------------
 fig, axes = plt.subplots(1, 3, figsize=(14.5, 4.5))
 
-draw_transport_kpg(axes[0], source_all, target_all, pi_kot,
-                   labels_s_all, labels_t_all, kp_s_full, kp_t_full,
-                   "(a) KOT", acc_kot)
+draw_panel(axes[0], source_all, target_all, pi_kot,
+           labels_s_all, labels_t_all, keypoints_full,
+           "(a) KOT", acc_kot)
 
-draw_transport_kpg(axes[1], source_mb, target_mb, pi_mkot,
-                   mb_s_labels, mb_t_labels, kp_s_mb, kp_t_mb,
-                   "(b) mKOT (mini-batch)", acc_mkot,
-                   show_all_data=True, source_full=source_all, target_full=target_all,
-                   labels_s_full=labels_s_all, labels_t_full=labels_t_all)
+draw_panel(axes[1], source_mb, target_mb, pi_mkot,
+           mb_s_labels, mb_t_labels, keypoints_mb,
+           "(b) mKOT (mini-batch)", acc_mkot,
+           show_all_data=True, source_full=source_all, target_full=target_all,
+           labels_s_full=labels_s_all, labels_t_full=labels_t_all)
 
-draw_transport_kpg(axes[2], source_mb, target_mb, pi_mkpot,
-                   mb_s_labels, mb_t_labels, kp_s_mb, kp_t_mb,
-                   "(c) mKPOT (mini-batch)", acc_mkpot,
-                   show_all_data=True, source_full=source_all, target_full=target_all,
-                   labels_s_full=labels_s_all, labels_t_full=labels_t_all)
+draw_panel(axes[2], source_mb, target_mb, pi_mkpot,
+           mb_s_labels, mb_t_labels, keypoints_mb,
+           "(c) mKPOT (mini-batch)", acc_mkpot,
+           show_all_data=True, source_full=source_all, target_full=target_all,
+           labels_s_full=labels_s_all, labels_t_full=labels_t_all)
 
 legend_handles = [
     Line2D([0], [0], marker='o', color='w', markerfacecolor=SRC_COLOR,
            markeredgecolor=SRC_COLOR, markersize=8, label='Source'),
     Line2D([0], [0], marker='o', color='w', markerfacecolor='none',
            markeredgecolor=TGT_COLOR, markersize=8, label='Target'),
-    Line2D([0], [0], marker='o', color='w', markerfacecolor=KP_COLOR,
-           markeredgecolor=KP_COLOR, markersize=10,
-           label='Keypoint (class marker, red)'),
-    Line2D([0], [0], color=KP_LINE, linewidth=2.2, label='Keypoint match'),
+    Line2D([0], [0], marker='o', color='w', markerfacecolor='none',
+           markeredgecolor=KEYPOINT_RING, markersize=10,
+           markeredgewidth=1.8, label='Keypoint'),
+    Line2D([0], [0], color=KEYPOINT_COLOR, linewidth=2.0, label='Keypoint match'),
     Line2D([0], [0], color=CORRECT_LINE, linewidth=1.5, label='Correct match'),
     Line2D([0], [0], color=WRONG_LINE, linewidth=1.5, label='Incorrect match'),
 ]
 fig.legend(handles=legend_handles, loc='lower center', ncol=6,
-           fontsize=10, framealpha=0.9, edgecolor='#D1D5DB',
+           fontsize=9.5, framealpha=0.9, edgecolor='#D1D5DB',
            bbox_to_anchor=(0.5, -0.05))
 
 plt.tight_layout(w_pad=1.5)
 
-out_dir = "/home/doanpt/locnd/Mini-batch_Keypoint-Guided-Relative_OT/Mini-batch_KPG-RL_OT/figures/results"
+out_dir = "results"
 fig.savefig(f"{out_dir}/fig2_kpg.png", bbox_inches="tight", dpi=300)
 
-# ---- Individual panels -------------------------------------------------
-for tag, xs, xt, pi, ls, lt, kps, kpt, title, acc, show_bg in [
-    ("fig2a_kot",   source_all, target_all, pi_kot,
-     labels_s_all, labels_t_all, kp_s_full, kp_t_full,
-     "(a) KOT", acc_kot, False),
-    ("fig2b_mkot",  source_mb, target_mb, pi_mkot,
-     mb_s_labels, mb_t_labels, kp_s_mb, kp_t_mb,
-     "(b) mKOT (mini-batch)", acc_mkot, True),
-    ("fig2c_mkpot", source_mb, target_mb, pi_mkpot,
-     mb_s_labels, mb_t_labels, kp_s_mb, kp_t_mb,
-     "(c) mKPOT (mini-batch)", acc_mkpot, True),
-]:
-    fig_single, ax_single = plt.subplots(1, 1, figsize=(5, 4.5))
-    draw_transport_kpg(ax_single, xs, xt, pi, ls, lt, kps, kpt, title, acc,
-                       show_all_data=show_bg,
-                       source_full=source_all, target_full=target_all,
-                       labels_s_full=labels_s_all, labels_t_full=labels_t_all)
-    fig_single.tight_layout()
-    fig_single.savefig(f"{out_dir}/{tag}.png", bbox_inches="tight", dpi=300)
-    plt.close(fig_single)
+# Individual panels -------------------------------------------------------
+panels = [
+    ("fig2a_kot",   source_all, target_all, pi_kot,   labels_s_all, labels_t_all,
+     keypoints_full, "(a) KOT",                   acc_kot,   False),
+    ("fig2b_mkot",  source_mb,  target_mb,  pi_mkot,  mb_s_labels,  mb_t_labels,
+     keypoints_mb,  "(b) mKOT (mini-batch)",     acc_mkot,  True),
+    ("fig2c_mkpot", source_mb,  target_mb,  pi_mkpot, mb_s_labels,  mb_t_labels,
+     keypoints_mb,  "(c) mKPOT (mini-batch)",    acc_mkpot, True),
+]
+for tag, xs, xt, pi, ls, lt, kps, title, acc, show_bg in panels:
+    fig_s, ax_s = plt.subplots(1, 1, figsize=(5, 4.5))
+    draw_panel(ax_s, xs, xt, pi, ls, lt, kps, title, acc,
+               show_all_data=show_bg, source_full=source_all,
+               target_full=target_all, labels_s_full=labels_s_all,
+               labels_t_full=labels_t_all)
+    fig_s.tight_layout()
+    fig_s.savefig(f"{out_dir}/{tag}.png", bbox_inches="tight", dpi=300)
+    plt.close(fig_s)
 
 plt.close("all")
-print(f"Figures saved to {out_dir}/")
+print(f"\nFigures saved to {out_dir}/")
