@@ -1,1 +1,0 @@
-method AC_mot_k1_m65_mass0.65, iter: 03500, precision: 0.46567

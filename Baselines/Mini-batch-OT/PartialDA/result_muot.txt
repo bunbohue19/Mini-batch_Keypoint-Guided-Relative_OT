@@ -1,1 +1,0 @@
-method AC_muot_k1_m65_mass0.65, iter: 01500, precision: 0.46269

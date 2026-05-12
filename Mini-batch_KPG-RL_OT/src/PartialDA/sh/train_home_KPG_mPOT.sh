@@ -5,7 +5,7 @@
 # OT type : partial (POT)
 # Baseline: m-POT (Nguyen et al., ICML 2022) uses ETA1=0.003, ETA2=0.75, ETA3=10,
 #           EPSILON=0 (exact), MASS=0.65
-# KPG adds: --use_kpg, ALPHA=0.9, TAU_S=TAU_T=0.5
+# KPG adds: --use_kpg, ALPHA=0.5, TAU_S=TAU_T=0.5
 #
 # Usage:
 #   bash sh/train_home_KPG_mPOT.sh [GPU_ID]

@@ -1,7 +1,9 @@
-torch==2.1.2+cu121
-torchvision==0.16.2+cu121
-torchaudio==2.1.2+cu121
-numpy==1.21.2
+--index-url https://download.pytorch.org/whl/cu128
+--extra-index-url https://pypi.org/simple
+torch==2.7.1+cu128
+torchvision==0.22.1+cu128
+torchaudio==2.7.1+cu128
+numpy>=1.24
 tqdm==4.62.3
 pot==0.8.2
 matplotlib==3.5.0

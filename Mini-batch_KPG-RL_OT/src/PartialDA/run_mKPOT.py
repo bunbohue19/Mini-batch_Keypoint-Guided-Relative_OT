@@ -180,7 +180,15 @@ def select_keypoints_from_batch(
 # -----------------------------------------------------------------------
 
 def solve_ot(a, b, M_norm, ot_type, epsilon, tau, adap_mass):
-    """Standard OT dispatcher (ot / uot / pot)."""
+    """Standard OT dispatcher (ot / uot / pot).
+
+    Note on entropic POT stability: `ot.partial.entropic_partial_wasserstein`
+    can return NaN when `adap_mass` is very small (~0.01 during the warm-up
+    of the linear ramp) combined with small `epsilon` — the multiplicative
+    Sinkhorn updates `q1 * Kprev / K1` produce 0/0.  When that happens we
+    fall back to the exact LP solver `ot.partial.partial_wasserstein`, which
+    is unconditionally stable.
+    """
     if ot_type == "ot":
         if epsilon == 0:
             return ot.emd(a, b, M_norm)
@@ -191,8 +199,13 @@ def solve_ot(a, b, M_norm, ot_type, epsilon, tau, adap_mass):
     elif ot_type == "pot":
         if epsilon == 0:
             return ot.partial.partial_wasserstein(a, b, M_norm, adap_mass)
-        else:
-            return ot.partial.entropic_partial_wasserstein(a, b, M_norm, m=adap_mass, reg=epsilon)
+        pi = ot.partial.entropic_partial_wasserstein(
+            a, b, M_norm, m=adap_mass, reg=epsilon
+        )
+        if np.any(np.isnan(pi)):
+            # Sinkhorn diverged — fall back to exact LP
+            return ot.partial.partial_wasserstein(a, b, M_norm, adap_mass)
+        return pi
 
 
 def solve_ot_kpg(
