@@ -287,7 +287,7 @@ if __name__ == "__main__":
     os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu_id
 
     if args.dset == "office_home":
-        names = ["Art", "Clipart", "Product", "RealWorld"]
+        names = ["Art", "Clipart", "Product", "Real_World"]
         k = 25
         args.class_num = 65
         args.max_iterations = 5000

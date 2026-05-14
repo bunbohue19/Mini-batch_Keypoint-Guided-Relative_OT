@@ -1,0 +1,13 @@
+method AC_mpot_k1_m65_mass0.60, iter: 01000, precision: 0.52817
+method AP_mpot_k1_m65_mass0.60, iter: 01000, precision: 0.67309
+method AR_mpot_k1_m65_mass0.60, iter: 01500, precision: 0.76243
+method CA_mpot_k1_m65_mass0.60, iter: 01000, precision: 0.64894
+method CP_mpot_k1_m65_mass0.60, iter: 01500, precision: 0.68152
+method CR_mpot_k1_m65_mass0.60, iter: 01500, precision: 0.76012
+method PA_mpot_k1_m65_mass0.60, iter: 01000, precision: 0.64574
+method PC_mpot_k1_m65_mass0.60, iter: 01500, precision: 0.55891
+method PR_mpot_k1_m65_mass0.60, iter: 01000, precision: 0.74277
+method RA_mpot_k1_m65_mass0.60, iter: 01000, precision: 0.74574
+method RC_mpot_k1_m65_mass0.60, iter: 01500, precision: 0.56118
+method RP_mpot_k1_m65_mass0.60, iter: 01000, precision: 0.78387
+method AC_mpot_k1_m65_mass0.65, iter: 01000, precision: 0.54639

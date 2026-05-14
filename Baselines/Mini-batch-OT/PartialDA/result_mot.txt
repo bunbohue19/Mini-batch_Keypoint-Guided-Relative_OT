@@ -1,0 +1,12 @@
+method AC_mot_k1_m65_mass0.65, iter: 04000, precision: 0.46443
+method AP_mot_k1_m65_mass0.65, iter: 03500, precision: 0.60807
+method AR_mot_k1_m65_mass0.65, iter: 00500, precision: 0.71965
+method CA_mot_k1_m65_mass0.65, iter: 03000, precision: 0.55426
+method CP_mot_k1_m65_mass0.65, iter: 01000, precision: 0.61770
+method CR_mot_k1_m65_mass0.65, iter: 02500, precision: 0.65491
+method PA_mot_k1_m65_mass0.65, iter: 03500, precision: 0.51383
+method PC_mot_k1_m65_mass0.65, iter: 05000, precision: 0.41662
+method PR_mot_k1_m65_mass0.65, iter: 00500, precision: 0.66301
+method RA_mot_k1_m65_mass0.65, iter: 00500, precision: 0.66383
+method RC_mot_k1_m65_mass0.65, iter: 04500, precision: 0.49232
+method RP_mot_k1_m65_mass0.65, iter: 01500, precision: 0.74895

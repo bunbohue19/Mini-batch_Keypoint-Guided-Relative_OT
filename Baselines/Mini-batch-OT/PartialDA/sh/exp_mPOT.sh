@@ -20,11 +20,11 @@ MASS=0.65
 
 for i in {12..20}
 do
-    MASS=$(awk "BEGIN {printf \"%.2f\", $i / 20}")
+    MASS=$(LC_ALL=C awk "BEGIN {printf \"%.2f\", $i / 20}")
     echo "-- mass = $MASS"
-    for S in {0..0}
+    for S in {0..3}
     do
-        for T in {0..1}
+        for T in {0..3}
         do
             if [ $S != $T ]
             then

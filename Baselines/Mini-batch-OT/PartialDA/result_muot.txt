@@ -1,0 +1,12 @@
+method AC_muot_k1_m65_mass0.65, iter: 00500, precision: 0.25726
+method AP_muot_k1_m65_mass0.65, iter: 00500, precision: 0.31246
+method AR_muot_k1_m65_mass0.65, iter: 00500, precision: 0.38092
+method CA_muot_k1_m65_mass0.65, iter: 00500, precision: 0.26170
+method CP_muot_k1_m65_mass0.65, iter: 01000, precision: 0.32029
+method CR_muot_k1_m65_mass0.65, iter: 01500, precision: 0.34855
+method PA_muot_k1_m65_mass0.65, iter: 00500, precision: 0.22553
+method PC_muot_k1_m65_mass0.65, iter: 00500, precision: 0.22026
+method PR_muot_k1_m65_mass0.65, iter: 00500, precision: 0.37110
+method RA_muot_k1_m65_mass0.65, iter: 00500, precision: 0.32021
+method RC_muot_k1_m65_mass0.65, iter: 00500, precision: 0.29880
+method RP_muot_k1_m65_mass0.65, iter: 00500, precision: 0.38290

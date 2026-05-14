@@ -1,5 +1,5 @@
 #!/bin/bash
-gpus=0,1
+gpus=1,2
 ot_type=uot
 method=mOT
 
@@ -18,9 +18,9 @@ K=1
 M=65
 MASS=0.65
 
-for S in {0..0}
+for S in {0..3}
 do
-    for T in {0..1}
+    for T in {0..3}
     do
         if [ $S != $T ]
         then
