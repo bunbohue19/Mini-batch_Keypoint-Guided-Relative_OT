@@ -21,7 +21,7 @@ EPSILON=0.01    # small entropic reg for numerical stability (0 = exact EMD)
 TAU=0.06
 K=1
 M=65            # batch size
-MASS=0.5        # transported mass (ramps up to this value during training)
+MASS=0.65       # transported mass (ramps up to this value during training)
 ALPHA=0.5       # KPG blending: cost = ALPHA*C_norm + (1-ALPHA)*G
 TAU_S=0.5
 TAU_T=0.5

@@ -19,6 +19,11 @@ export CUDA_VISIBLE_DEVICES=${1:-0}
 #   0=Art(Ar), 1=Clipart(Cl), 2=Product(Pr), 3=Real_World(Rw)
 DOMAIN_NAMES=(Art Clipart Product Real_World)
 
+# Logging: per-transfer full stdout under LOG_DIR, summary in RESULT_FILE.
+LOG_DIR="logs/office-home"
+RESULT_FILE="result_warmpot.txt"
+mkdir -p "$LOG_DIR"
+
 # Resume from a specific transfer (format: "Source2Target", e.g. "Cl2Pr").
 # Set to empty string to run all transfers from the beginning.
 RESUME_FROM="${RESUME_FROM:-}"
@@ -44,7 +49,8 @@ for s in 0 1 2 3; do
             fi
         fi
         echo "===== Office-Home (PDA 65/25): $S_NAME -> $T_NAME ====="
-        python warmpot.py \
+        LOG_FILE="${LOG_DIR}/${TAG}.log"
+        python -u warmpot.py \
             --dset OfficeHome \
             --s "$s" \
             --t "$t" \
@@ -61,6 +67,10 @@ for s in 0 1 2 3; do
             --seed 2020 \
             --mass_increase_i 2500 \
             --net ResNet50 \
-            --use_wandb 0
+            --use_wandb 0 2>&1 | tee "$LOG_FILE"
+
+        # Append final best accuracy to the summary result file.
+        BEST_ACC=$(grep -oE "Acc:[[:space:]]*[0-9.]+" "$LOG_FILE" | tail -n 1 | awk '{print $2}')
+        echo "method warmpot_${TAG} (${S_NAME}->${T_NAME}), best_acc: ${BEST_ACC:-N/A}" >> "$RESULT_FILE"
     done
 done
