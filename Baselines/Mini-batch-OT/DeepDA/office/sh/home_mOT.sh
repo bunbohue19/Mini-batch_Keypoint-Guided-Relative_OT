@@ -1,5 +1,5 @@
 #!/bin/bash
-gpus=1
+gpus=0,1
 export CUDA_VISIBLE_DEVICES=${gpus}
 echo "using gpus ${gpus}"
 ot_type=balanced
@@ -35,6 +35,9 @@ fi
 if [ $use_bomb = yes ]
 then
     loss_type=BoMb_${loss_type}
+    USE_BOMB_FLAG="--use_bomb"
+else
+    USE_BOMB_FLAG=""
 fi
 
 for num in 01
@@ -105,9 +108,9 @@ do
     DES="home_${output_dir}_${loss_type}_run${run_id}"
     final_log="home_${loss_type}_run${run_id}"
 
-    for i in {10..10}
+    for i in {13..13}
     do
-        MASS=$(awk "BEGIN {printf \"%.2f\", $i / 20}")
+        MASS=$(LC_ALL=C awk "BEGIN {printf \"%.2f\", $i / 20}")  # 0.65
         echo "-- mass = $MASS"
         output_dir="${DES}_mass${MASS}_k${K}_m${M}_epsilon${EPSILON}"
         echo "Begin in ${output_dir}"
@@ -130,8 +133,9 @@ do
                         --epsilon $EPSILON \
                         --tau $TAU \
                         --mass $MASS \
-                        --use_bomb ${use_bomb} \
-                        --k $K
+                        ${USE_BOMB_FLAG} \
+                        --k $K \
+                        --use_mirror_sinkhorn
         echo "Finish in ${output_dir}"
     done
 done
