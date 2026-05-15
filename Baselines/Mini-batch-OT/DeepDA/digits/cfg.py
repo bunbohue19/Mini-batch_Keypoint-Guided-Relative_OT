@@ -28,6 +28,18 @@ def parse_args():
     parser.add_argument("--eta1", type=float, default=0.1, help="weight of embedding loss")
     parser.add_argument("--eta2", type=float, default=0.1, help="weight of transportation loss")
 
+    # --- Mirror Sinkhorn (Ballu & Berthet, ICML 2023) ---
+    parser.add_argument(
+        "--use_mirror_sinkhorn", action="store_true",
+        help="replace the entropic-Sinkhorn / EMD inner OT solver with "
+             "Mirror Sinkhorn (bias-free, NaN-free).  Works for jdot, "
+             "jumbot, jpmbot.",
+    )
+    parser.add_argument(
+        "--ms_iter", type=int, default=500,
+        help="Mirror Sinkhorn iterations per OT solve.",
+    )
+
     args = parser.parse_args()
 
     return args

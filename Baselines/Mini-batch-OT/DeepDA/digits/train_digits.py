@@ -209,6 +209,8 @@ def main():
         mass=args.mass,
         tau=args.tau,
         test_interval=args.test_interval,
+        use_mirror_sinkhorn=args.use_mirror_sinkhorn,
+        ms_iter=args.ms_iter,
     )
 
     # ── 8. Training ───────────────────────────────────────────────────────────

@@ -12,10 +12,36 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 from data_list import BalancedBatchSampler, ImageList, ImageList_label
+from mirror_sinkhorn import mirror_sinkhorn
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 OFFICE_HOME_LIST_PREFIX = "/data/office-home/images/"
+
+
+def _solve_inner_ot(a, b, M_cpu, ot_type, epsilon, tau, mass,
+                    use_mirror_sinkhorn=False, ms_iter=500):
+    """Mini-batch OT inner solver (shared by all three OT call-sites).
+
+    Dispatches to Mirror Sinkhorn (Ballu & Berthet, ICML 2023) if
+    `use_mirror_sinkhorn=True`, otherwise to the original POT solvers.
+    """
+    if use_mirror_sinkhorn:
+        return mirror_sinkhorn(
+            ot_type, a, b, M_cpu,
+            mass=mass, tau=tau, n_iter=ms_iter,
+        )
+    if ot_type == "balanced":
+        if epsilon == 0:
+            return ot.emd(a, b, M_cpu)
+        return ot.sinkhorn(a, b, M_cpu, epsilon)
+    elif ot_type == "unbalanced":
+        return ot.unbalanced.sinkhorn_knopp_unbalanced(a, b, M_cpu, epsilon, tau)
+    elif ot_type == "partial":
+        if epsilon == 0:
+            return ot.partial.partial_wasserstein(a, b, M_cpu, mass)
+        return ot.partial.entropic_partial_wasserstein(a, b, M_cpu, m=mass, reg=epsilon)
+    raise ValueError(f"Unknown ot_type: {ot_type}")
 
 
 def build_list_path_candidates(raw_path, list_path):
@@ -292,18 +318,11 @@ def train(config):
                         M = eta1 * M_embed + eta2 * M_sce
                         a, b = ot.unif(g_xs_mb.size(0)), ot.unif(g_xt_mb.size(0))
                         M_cpu = M.detach().cpu().numpy()
-                        if ot_type == "balanced":
-                            if epsilon == 0:
-                                pi = ot.emd(a, b, M_cpu)
-                            else:
-                                pi = ot.sinkhorn(a, b, M_cpu, epsilon)
-                        elif ot_type == "unbalanced":
-                            pi = ot.unbalanced.sinkhorn_knopp_unbalanced(a, b, M_cpu, epsilon, tau)
-                        elif ot_type == "partial":
-                            if epsilon == 0:
-                                pi = ot.partial.partial_wasserstein(a, b, M_cpu, mass)
-                            else:
-                                pi = ot.partial.entropic_partial_wasserstein(a, b, M_cpu, m=mass, reg=epsilon)
+                        pi = _solve_inner_ot(
+                            a, b, M_cpu, ot_type, epsilon, tau, mass,
+                            use_mirror_sinkhorn=config.get("use_mirror_sinkhorn", False),
+                            ms_iter=config.get("ms_iter", 500),
+                        )
                         pi = torch.from_numpy(pi).float().cuda()
                         transfer_loss = torch.sum(pi * M)
                         list_transfer_loss.append(transfer_loss)
@@ -339,18 +358,11 @@ def train(config):
                     M = eta1 * M_embed + eta2 * M_sce
                     a, b = ot.unif(g_xs_mb.size(0)), ot.unif(g_xt_mb.size(0))
                     M_cpu = M.detach().cpu().numpy()
-                    if ot_type == "balanced":
-                        if epsilon == 0:
-                            pi = ot.emd(a, b, M_cpu)
-                        else:
-                            pi = ot.sinkhorn(a, b, M_cpu, epsilon)
-                    elif ot_type == "unbalanced":
-                        pi = ot.unbalanced.sinkhorn_knopp_unbalanced(a, b, M_cpu, epsilon, tau)
-                    elif ot_type == "partial":
-                        if epsilon == 0:
-                            pi = ot.partial.partial_wasserstein(a, b, M_cpu, mass)
-                        else:
-                            pi = ot.partial.entropic_partial_wasserstein(a, b, M_cpu, m=mass, reg=epsilon)
+                    pi = _solve_inner_ot(
+                        a, b, M_cpu, ot_type, epsilon, tau, mass,
+                        use_mirror_sinkhorn=config.get("use_mirror_sinkhorn", False),
+                        ms_iter=config.get("ms_iter", 500),
+                    )
                     pi = torch.from_numpy(pi).float().cuda()
                     transfer_loss = torch.sum(pi * M)
                     transfer_loss = plan[i, j] * transfer_loss
@@ -379,18 +391,11 @@ def train(config):
                 M = eta1 * M_embed + eta2 * M_sce
                 a, b = ot.unif(g_xs_mb.size(0)), ot.unif(g_xt_mb.size(0))
                 M_cpu = M.detach().cpu().numpy()
-                if ot_type == "balanced":
-                    if epsilon == 0:
-                        pi = ot.emd(a, b, M_cpu)
-                    else:
-                        pi = ot.sinkhorn(a, b, M_cpu, epsilon)
-                elif ot_type == "unbalanced":
-                    pi = ot.unbalanced.sinkhorn_knopp_unbalanced(a, b, M_cpu, epsilon, tau)
-                elif ot_type == "partial":
-                    if epsilon == 0:
-                        pi = ot.partial.partial_wasserstein(a, b, M_cpu, mass)
-                    else:
-                        pi = ot.partial.entropic_partial_wasserstein(a, b, M_cpu, m=mass, reg=epsilon)
+                pi = _solve_inner_ot(
+                    a, b, M_cpu, ot_type, epsilon, tau, mass,
+                    use_mirror_sinkhorn=config.get("use_mirror_sinkhorn", False),
+                    ms_iter=config.get("ms_iter", 500),
+                )
                 pi = torch.from_numpy(pi).float().cuda()
                 transfer_loss = torch.sum(pi * M)
                 transfer_loss = 1.0 / k * transfer_loss
@@ -484,6 +489,20 @@ if __name__ == "__main__":
     parser.add_argument("--use_bomb", action="store_true", help="whether to use BomB version")
     parser.add_argument("--be", type=float, default=0.0, help="OT regularization coefficient between mini-batches")
     parser.add_argument("--k", type=int, default=1, help="number of minibatches")
+
+    # --- Mirror Sinkhorn (Ballu & Berthet, ICML 2023) ---
+    parser.add_argument(
+        "--use_mirror_sinkhorn", action="store_true",
+        help="replace the entropic-Sinkhorn / EMD inner OT solver with "
+             "Mirror Sinkhorn (bias-free, NaN-free).  Applies to all three "
+             "ot_type values (balanced, unbalanced, partial).",
+    )
+    parser.add_argument(
+        "--ms_iter", type=int, default=500,
+        help="Mirror Sinkhorn iterations per OT solve (500 is a generous "
+             "default; reduce for speed).",
+    )
+
     args = parser.parse_args()
     os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu_id
 
@@ -510,6 +529,8 @@ if __name__ == "__main__":
     config["use_bomb"] = args.use_bomb
     config["be"] = args.be
     config["k"] = args.k
+    config["use_mirror_sinkhorn"] = args.use_mirror_sinkhorn
+    config["ms_iter"] = args.ms_iter
     config["output_for_test"] = True
     config["output_path"] = "snapshot/" + args.output_dir
     config["restore_path"] = "snapshot/" + args.restore_dir if args.restore_dir else None

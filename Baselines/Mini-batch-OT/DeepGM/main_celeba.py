@@ -78,6 +78,17 @@ def main():
     parser.add_argument("--tau", type=float, default=1, help="tau UOT")
     parser.add_argument("--mass", type=float, default=0.9, help="mass POT")
     parser.add_argument("--L", type=int, default=1000, help="L")
+
+    # --- Mirror Sinkhorn (Ballu & Berthet, ICML 2023) ---
+    parser.add_argument(
+        "--use_mirror_sinkhorn", action="store_true",
+        help="replace the inner OT solver with Mirror Sinkhorn.",
+    )
+    parser.add_argument(
+        "--ms_iter", type=int, default=500,
+        help="Mirror Sinkhorn iterations per OT solve.",
+    )
+
     args = parser.parse_args()
     # os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu_id
     # Set random seed
@@ -203,6 +214,8 @@ def main():
                 args.L,
                 bomb,
                 ebomb,
+                args.use_mirror_sinkhorn,
+                args.ms_iter,
             )
             total_g_loss += float(g_loss)
             total_d_loss += float(d_loss)

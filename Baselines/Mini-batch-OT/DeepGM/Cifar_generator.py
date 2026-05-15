@@ -2,7 +2,33 @@ import numpy as np
 import ot
 import torch
 import torch.nn as nn
+from mirror_sinkhorn import mirror_sinkhorn
 from utils import sliced_wasserstein_distance
+
+
+def _ot_dispatch(a, b, C_np, method, reg, tau, mass,
+                 use_mirror_sinkhorn=False, ms_iter=500):
+    """Inner OT solver for the mini-batch DeepGM pipeline.
+
+    Switches between the original POT solvers and Mirror Sinkhorn
+    (Ballu & Berthet, ICML 2023).  Method names ``"OT"`` / ``"UOT"`` /
+    ``"POT"`` are recognised by both paths.
+    """
+    if use_mirror_sinkhorn:
+        return mirror_sinkhorn(
+            method, a, b, C_np, mass=mass, tau=tau, n_iter=ms_iter,
+        )
+    if method == "OT":
+        if reg == 0:
+            return ot.emd(a, b, C_np)
+        return ot.sinkhorn(a, b, C_np, reg=reg)
+    if method == "UOT":
+        return ot.unbalanced.sinkhorn_knopp_unbalanced(a, b, C_np, reg=reg, reg_m=tau)
+    if method == "POT":
+        if reg == 0:
+            return ot.partial.partial_wasserstein(a, b, C_np, m=mass)
+        return ot.partial.entropic_partial_wasserstein(a, b, C_np, m=mass, reg=reg)
+    raise ValueError(f"Unknown method: {method}")
 
 
 class Discriminator(nn.Module):
@@ -93,7 +119,15 @@ class Cifar_Generator(nn.Module):
         L=1000,
         bomb=False,
         ebomb=False,
+        use_mirror_sinkhorn=False,
+        ms_iter=500,
     ):
+        # Bind the OT call into a local lambda so each call site stays one line.
+        def _solve_ot(a, b, C_np):
+            return _ot_dispatch(
+                a, b, C_np, method, reg, tau, mass,
+                use_mirror_sinkhorn=use_mirror_sinkhorn, ms_iter=ms_iter,
+            )
         # Sample latent vectors
         z = torch.randn((data.shape[0], self.latent_size))
         # Sample indices
@@ -136,22 +170,7 @@ class Cifar_Generator(nn.Module):
                         feature_fake_mb = feature_fake_mb.view(z_mb.size(0), -1)
                         cost_matrix = torch.cdist(feature_data_mb, feature_fake_mb) ** 2
                         a, b = ot.unif(cost_matrix.size(0)), ot.unif(cost_matrix.size(1))
-                        if method == "OT":
-                            if reg == 0:
-                                pi = ot.emd(a, b, cost_matrix.detach().cpu().numpy())
-                            else:
-                                pi = ot.sinkhorn(a, b, cost_matrix.detach().cpu().numpy(), reg=reg)
-                        elif method == "UOT":
-                            pi = ot.unbalanced.sinkhorn_knopp_unbalanced(
-                                a, b, cost_matrix.detach().cpu().numpy(), reg=reg, reg_m=tau
-                            )
-                        elif method == "POT":
-                            if reg == 0:
-                                pi = ot.partial.partial_wasserstein(a, b, cost_matrix.detach().cpu().numpy(), m=mass)
-                            else:
-                                pi = ot.partial.entropic_partial_wasserstein(
-                                    a, b, cost_matrix.detach().cpu().numpy(), m=mass, reg=reg
-                                )
+                        pi = _solve_ot(a, b, cost_matrix.detach().cpu().numpy())
                         pi = torch.from_numpy(pi).cuda(self.device)
                         dloss.append(torch.sum(pi * cost_matrix))
                 # Solving kxk OT
@@ -200,22 +219,7 @@ class Cifar_Generator(nn.Module):
                     feature_fake_mb = feature_fake_mb.view(z_mb.size(0), -1)
                     cost_matrix = torch.cdist(feature_data_mb, feature_fake_mb) ** 2
                     a, b = ot.unif(cost_matrix.size(0)), ot.unif(cost_matrix.size(1))
-                    if method == "OT":
-                        if reg == 0:
-                            pi = ot.emd(a, b, cost_matrix.detach().cpu().numpy())
-                        else:
-                            pi = ot.sinkhorn(a, b, cost_matrix.detach().cpu().numpy(), reg=reg)
-                    elif method == "UOT":
-                        pi = ot.unbalanced.sinkhorn_knopp_unbalanced(
-                            a, b, cost_matrix.detach().cpu().numpy(), reg=reg, reg_m=tau
-                        )
-                    elif method == "POT":
-                        if reg == 0:
-                            pi = ot.partial.partial_wasserstein(a, b, cost_matrix.detach().cpu().numpy(), m=mass)
-                        else:
-                            pi = ot.partial.entropic_partial_wasserstein(
-                                a, b, cost_matrix.detach().cpu().numpy(), m=mass, reg=reg
-                            )
+                    pi = _solve_ot(a, b, cost_matrix.detach().cpu().numpy())
                     pi = torch.from_numpy(pi).cuda(self.device)
                     if bomb or ebomb:
                         mloss = -plan[i, j] * torch.sum(pi * cost_matrix)
@@ -251,24 +255,7 @@ class Cifar_Generator(nn.Module):
                         else:
                             cost_matrix = torch.cdist(feature_data_mb, feature_fake_mb) ** 2
                             a, b = ot.unif(cost_matrix.size(0)), ot.unif(cost_matrix.size(1))
-                            if method == "OT":
-                                if reg == 0:
-                                    pi = ot.emd(a, b, cost_matrix.detach().cpu().numpy())
-                                else:
-                                    pi = ot.sinkhorn(a, b, cost_matrix.detach().cpu().numpy(), reg=reg)
-                            elif method == "UOT":
-                                pi = ot.unbalanced.sinkhorn_knopp_unbalanced(
-                                    a, b, cost_matrix.detach().cpu().numpy(), reg=reg, reg_m=tau
-                                )
-                            elif method == "POT":
-                                if reg == 0:
-                                    pi = ot.partial.partial_wasserstein(
-                                        a, b, cost_matrix.detach().cpu().numpy(), m=mass
-                                    )
-                                else:
-                                    pi = ot.partial.entropic_partial_wasserstein(
-                                        a, b, cost_matrix.detach().cpu().numpy(), m=mass, reg=reg
-                                    )
+                            pi = _solve_ot(a, b, cost_matrix.detach().cpu().numpy())
                             pi = torch.from_numpy(pi).cuda(self.device)
                             gloss.append(torch.sum(pi * cost_matrix))
                 # Solving kxk OT
@@ -301,22 +288,7 @@ class Cifar_Generator(nn.Module):
                 else:
                     cost_matrix = torch.cdist(feature_data_mb, feature_fake_mb) ** 2
                     a, b = ot.unif(cost_matrix.size(0)), ot.unif(cost_matrix.size(1))
-                    if method == "OT":
-                        if reg == 0:
-                            pi = ot.emd(a, b, cost_matrix.detach().cpu().numpy())
-                        else:
-                            pi = ot.sinkhorn(a, b, cost_matrix.detach().cpu().numpy(), reg=reg)
-                    elif method == "UOT":
-                        pi = ot.unbalanced.sinkhorn_knopp_unbalanced(
-                            a, b, cost_matrix.detach().cpu().numpy(), reg=reg, reg_m=tau
-                        )
-                    elif method == "POT":
-                        if reg == 0:
-                            pi = ot.partial.partial_wasserstein(a, b, cost_matrix.detach().cpu().numpy(), m=mass)
-                        else:
-                            pi = ot.partial.entropic_partial_wasserstein(
-                                a, b, cost_matrix.detach().cpu().numpy(), m=mass, reg=reg
-                            )
+                    pi = _solve_ot(a, b, cost_matrix.detach().cpu().numpy())
                     pi = torch.from_numpy(pi).cuda(self.device)
                     loss = torch.sum(pi * cost_matrix)
                 if bomb or ebomb:

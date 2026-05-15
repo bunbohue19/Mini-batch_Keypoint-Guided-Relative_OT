@@ -2,7 +2,32 @@ import numpy as np
 import ot
 import torch
 import torch.nn as nn
+from mirror_sinkhorn import mirror_sinkhorn
 from utils import sliced_wasserstein_distance
+
+
+def _ot_dispatch(a, b, C_np, method, reg, tau, mass,
+                 use_mirror_sinkhorn=False, ms_iter=500):
+    """Inner OT solver for the mini-batch DeepGM pipeline.
+
+    Switches between the original POT solvers and Mirror Sinkhorn
+    (Ballu & Berthet, ICML 2023).
+    """
+    if use_mirror_sinkhorn:
+        return mirror_sinkhorn(
+            method, a, b, C_np, mass=mass, tau=tau, n_iter=ms_iter,
+        )
+    if method == "OT":
+        if reg == 0:
+            return ot.emd(a, b, C_np)
+        return ot.sinkhorn(a, b, C_np, reg=reg)
+    if method == "UOT":
+        return ot.unbalanced.sinkhorn_knopp_unbalanced(a, b, C_np, reg=reg, reg_m=tau)
+    if method == "POT":
+        if reg == 0:
+            return ot.partial.partial_wasserstein(a, b, C_np, m=mass)
+        return ot.partial.entropic_partial_wasserstein(a, b, C_np, m=mass, reg=reg)
+    raise ValueError(f"Unknown method: {method}")
 
 
 class Generator(nn.Module):
@@ -36,8 +61,14 @@ class MnistGenerator(nn.Module):
         self.decoder = Generator(image_size, hidden_size, latent_size)
 
     def train_minibatch(
-        self, model_op, data, k, m, method="OT", reg=0, breg=0, tau=1, mass=0.9, L=1000, bomb=False, ebomb=False
+        self, model_op, data, k, m, method="OT", reg=0, breg=0, tau=1, mass=0.9, L=1000,
+        bomb=False, ebomb=False, use_mirror_sinkhorn=False, ms_iter=500,
     ):
+        def _solve_ot(a, b, C_np):
+            return _ot_dispatch(
+                a, b, C_np, method, reg, tau, mass,
+                use_mirror_sinkhorn=use_mirror_sinkhorn, ms_iter=ms_iter,
+            )
         # Sample latent vectors
         z = torch.randn((data.shape[0], self.latent_size))
         # Sample indices
@@ -88,24 +119,7 @@ class MnistGenerator(nn.Module):
                                 ** 2
                             )
                             a, b = ot.unif(cost_matrix.size(0)), ot.unif(cost_matrix.size(1))
-                            if method == "OT":
-                                if reg == 0:
-                                    pi = ot.emd(a, b, cost_matrix.detach().cpu().numpy())
-                                else:
-                                    pi = ot.sinkhorn(a, b, cost_matrix.detach().cpu().numpy(), reg=reg)
-                            elif method == "UOT":
-                                pi = ot.unbalanced.sinkhorn_knopp_unbalanced(
-                                    a, b, cost_matrix.detach().cpu().numpy(), reg=reg, reg_m=tau
-                                )
-                            elif method == "POT":
-                                if reg == 0:
-                                    pi = ot.partial.partial_wasserstein(
-                                        a, b, cost_matrix.detach().cpu().numpy(), m=mass
-                                    )
-                                else:
-                                    pi = ot.partial.entropic_partial_wasserstein(
-                                        a, b, cost_matrix.detach().cpu().numpy(), m=mass, reg=reg
-                                    )
+                            pi = _solve_ot(a, b, cost_matrix.detach().cpu().numpy())
                             pi = torch.from_numpy(pi).cuda(self.device)
                             gloss.append(torch.sum(pi * cost_matrix))
                 # Solving kxk OT
@@ -138,22 +152,7 @@ class MnistGenerator(nn.Module):
                         torch.cdist(data_mb.view(data_mb.shape[0], -1), fake_mb.view(fake_mb.shape[0], -1)) ** 2
                     )
                     a, b = ot.unif(cost_matrix.size(0)), ot.unif(cost_matrix.size(1))
-                    if method == "OT":
-                        if reg == 0:
-                            pi = ot.emd(a, b, cost_matrix.detach().cpu().numpy())
-                        else:
-                            pi = ot.sinkhorn(a, b, cost_matrix.detach().cpu().numpy(), reg=reg)
-                    elif method == "UOT":
-                        pi = ot.unbalanced.sinkhorn_knopp_unbalanced(
-                            a, b, cost_matrix.detach().cpu().numpy(), reg=reg, reg_m=tau
-                        )
-                    elif method == "POT":
-                        if reg == 0:
-                            pi = ot.partial.partial_wasserstein(a, b, cost_matrix.detach().cpu().numpy(), m=mass)
-                        else:
-                            pi = ot.partial.entropic_partial_wasserstein(
-                                a, b, cost_matrix.detach().cpu().numpy(), m=mass, reg=reg
-                            )
+                    pi = _solve_ot(a, b, cost_matrix.detach().cpu().numpy())
                     pi = torch.from_numpy(pi).cuda(self.device)
                     loss = torch.sum(pi * cost_matrix)
                 if bomb or ebomb:

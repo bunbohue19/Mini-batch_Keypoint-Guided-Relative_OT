@@ -12,6 +12,7 @@ from torch.utils.data import DataLoader
 from torchvision import transforms
 from tqdm import tqdm
 from utils import BalancedBatchSampler
+from mirror_sinkhorn import mirror_sinkhorn
 
 
 def image_train(resize_size=256, crop_size=224):
@@ -205,7 +206,25 @@ def train(args):
             # Normalize cost matrix to [0,1] for numerical stability so that epsilon is meaningful
             M_scale = M_cpu.max() + 1e-8
             M_cpu_norm = M_cpu / M_scale
-            if ot_type == "ot":
+            # Adaptive mass ramp (POT only; matches original schedule).
+            if ot_type == "pot":
+                if i <= (args.max_iterations / 2):
+                    adap_mass = min(mass / (args.max_iterations / 2) * i + 0.01, mass)
+                else:
+                    adap_mass = mass
+            else:
+                adap_mass = mass
+
+            if args.use_mirror_sinkhorn:
+                # Mirror Sinkhorn inner solver (Ballu & Berthet, ICML 2023).
+                # Bias-free; no NaN at small adap_mass.
+                pi = mirror_sinkhorn(
+                    ot_type, a, b, M_cpu_norm,
+                    mass=adap_mass, tau=tau, n_iter=args.ms_iter,
+                    # already normalised above
+                    normalize_cost=False,
+                )
+            elif ot_type == "ot":
                 if epsilon == 0:
                     pi = ot.emd(a, b, M_cpu_norm)
                 else:
@@ -213,11 +232,6 @@ def train(args):
             elif ot_type == "uot":
                 pi = ot.unbalanced.sinkhorn_knopp_unbalanced(a, b, M_cpu_norm, epsilon, tau)
             elif ot_type == "pot":
-                if i <= (args.max_iterations / 2):
-                    adap_mass = min(mass / (args.max_iterations / 2) * i + 0.01, mass)
-                else:
-                    adap_mass = mass
-                # adap_mass = int(adap_mass * train_bs + 1) / train_bs
                 if epsilon == 0:
                     pi = ot.partial.partial_wasserstein(a, b, M_cpu_norm, adap_mass)
                 else:
@@ -287,6 +301,20 @@ if __name__ == "__main__":
     parser.add_argument("--tau", type=float, default=0.06, help="marginal penalization coeffidient")
     parser.add_argument("--mass", type=float, default=0.5, help="ratio of masses to be transported")
     parser.add_argument("--k", type=int, default=1, help="number of minibatches")
+
+    # --- Mirror Sinkhorn (Ballu & Berthet, ICML 2023) ---
+    parser.add_argument(
+        "--use_mirror_sinkhorn", action="store_true",
+        help="replace the entropic-Sinkhorn / EMD inner OT solver with "
+             "Mirror Sinkhorn (bias-free, NaN-free).  Works for ot, uot, "
+             "and pot.  For pot the entropic_partial_wasserstein NaN at "
+             "small adap_mass is also avoided.",
+    )
+    parser.add_argument(
+        "--ms_iter", type=int, default=500,
+        help="number of Mirror Sinkhorn iterations per OT solve.  500 is a "
+             "generous default for batches of ~65; reduce for speed.",
+    )
 
     args = parser.parse_args()
     os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu_id

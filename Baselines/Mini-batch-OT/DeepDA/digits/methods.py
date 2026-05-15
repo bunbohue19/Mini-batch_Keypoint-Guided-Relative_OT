@@ -27,6 +27,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.utils.data
+from mirror_sinkhorn import mirror_sinkhorn
 from tqdm import tqdm
 from utils import model_eval, save_acc
 
@@ -62,6 +63,8 @@ class DigitsDA:
         mass=0.5,
         tau=1.0,
         test_interval=10,
+        use_mirror_sinkhorn=False,
+        ms_iter=500,
     ):
         """
         Args:
@@ -96,7 +99,40 @@ class DigitsDA:
         self.mass = mass                # Partial OT mass fraction
         self.tau = tau                  # Unbalanced OT marginal penalty
         self.test_interval = test_interval
+        # Mirror Sinkhorn (Ballu & Berthet, ICML 2023) — replaces inner OT solver.
+        self.use_mirror_sinkhorn = use_mirror_sinkhorn
+        self.ms_iter = ms_iter
         self.logger.info("eta1, eta2, epsilon : {}, {}, {}".format(self.eta1, self.eta2, self.epsilon))
+        self.logger.info(
+            "use_mirror_sinkhorn = {}, ms_iter = {}".format(self.use_mirror_sinkhorn, self.ms_iter)
+        )
+
+    def _solve_inner_ot(self, a, b, C_np, method):
+        """Mini-batch OT inner solver (shared by fit, fit_bomb, fit_bomb2).
+
+        Dispatches to Mirror Sinkhorn (Ballu & Berthet, ICML 2023) when
+        `self.use_mirror_sinkhorn` is True, else to the original POT
+        solvers.  Single source of truth for the inner OT computation.
+        """
+        if self.use_mirror_sinkhorn:
+            return mirror_sinkhorn(
+                method, a, b, C_np,
+                mass=self.mass, tau=self.tau, n_iter=self.ms_iter,
+            )
+        if method == "jumbot":
+            return ot.unbalanced.sinkhorn_knopp_unbalanced(a, b, C_np, self.epsilon, self.tau)
+        if method == "jdot":
+            if self.epsilon == 0:
+                return ot.emd(a, b, C_np)
+            return ot.sinkhorn(a, b, C_np, reg=self.epsilon)
+        if method == "jpmbot":
+            if self.epsilon == 0:
+                return ot.partial.partial_wasserstein(a, b, C_np, self.mass)
+            _M = C_np / (C_np.max() + 1e-10)
+            return ot.partial.entropic_partial_wasserstein(
+                a, b, _M, m=self.mass, reg=self.epsilon
+            )
+        raise ValueError(f"Unknown method: {method}")
 
     def fit(
         self,
@@ -205,29 +241,9 @@ class DigitsDA:
                     # Uniform marginals (each sample has equal mass 1/m)
                     a, b = ot.unif(g_xs_mb.size()[0]), ot.unif(g_xt_mb.size()[0])
 
-                    if method == "jumbot":
-                        # Unbalanced OT: relaxes marginal constraints with KL penalty (τ)
-                        pi = ot.unbalanced.sinkhorn_knopp_unbalanced(
-                            a, b, total_cost.detach().cpu().numpy(), self.epsilon, self.tau
-                        )
-                    elif method == "jdot":
-                        if self.epsilon == 0:
-                            # Exact OT (Earth Mover's Distance) via linear programming
-                            pi = ot.emd(a, b, total_cost.detach().cpu().numpy())
-                        else:
-                            # Entropy-regularized OT via Sinkhorn iterations
-                            pi = ot.sinkhorn(a, b, total_cost.detach().cpu().numpy(), reg=self.epsilon)
-                    elif method == "jpmbot":
-                        if self.epsilon == 0:
-                            # Partial OT: only transports a fraction `mass` of the total mass
-                            pi = ot.partial.partial_wasserstein(a, b, total_cost.detach().cpu().numpy(), self.mass)
-                        else:
-                            # Entropic Partial OT: partial transport + Sinkhorn regularization
-                            _M = total_cost.detach().cpu().numpy()
-                            _M = _M / (_M.max() + 1e-10)
-                            pi = ot.partial.entropic_partial_wasserstein(
-                                a, b, _M, m=self.mass, reg=self.epsilon
-                            )
+                    pi = self._solve_inner_ot(
+                        a, b, total_cost.detach().cpu().numpy(), method
+                    )
 
                     # The OT plan π is computed without gradients (detached cost matrix),
                     # but the DA loss ⟨π, C⟩ IS differentiable w.r.t. the cost C
@@ -363,26 +379,9 @@ class DigitsDA:
 
                             # Solve inner OT for this (i,j) mini-batch pair
                             a, b = ot.unif(g_xs_mb.size()[0]), ot.unif(g_xt_mb.size()[0])
-                            if method == "jumbot":
-                                pi = ot.unbalanced.sinkhorn_knopp_unbalanced(
-                                    a, b, total_cost.detach().cpu().numpy(), self.epsilon, self.tau
-                                )
-                            elif method == "jdot":
-                                if self.epsilon == 0:
-                                    pi = ot.emd(a, b, total_cost.detach().cpu().numpy())
-                                else:
-                                    pi = ot.sinkhorn(a, b, total_cost.detach().cpu().numpy(), reg=self.epsilon)
-                            elif method == "jpmbot":
-                                if self.epsilon == 0:
-                                    pi = ot.partial.partial_wasserstein(
-                                        a, b, total_cost.detach().cpu().numpy(), self.mass
-                                    )
-                                else:
-                                    _M = total_cost.detach().cpu().numpy()
-                                    _M = _M / (_M.max() + 1e-10)
-                                    pi = ot.partial.entropic_partial_wasserstein(
-                                        a, b, _M, m=self.mass, reg=self.epsilon
-                                    )
+                            pi = self._solve_inner_ot(
+                                a, b, total_cost.detach().cpu().numpy(), method
+                            )
                             pi = torch.from_numpy(pi).float().cuda()
 
                             # Inner OT cost for pair (i, j): scalar ⟨π, C⟩
@@ -438,24 +437,9 @@ class DigitsDA:
 
                         # Re-solve inner OT (plan is detached — treated as fixed weights)
                         a, b = ot.unif(g_xs_mb.size()[0]), ot.unif(g_xt_mb.size()[0])
-                        if method == "jumbot":
-                            pi = ot.unbalanced.sinkhorn_knopp_unbalanced(
-                                a, b, total_cost.detach().cpu().numpy(), self.epsilon, self.tau
-                            )
-                        elif method == "jdot":
-                            if self.epsilon == 0:
-                                pi = ot.emd(a, b, total_cost.detach().cpu().numpy())
-                            else:
-                                pi = ot.sinkhorn(a, b, total_cost.detach().cpu().numpy(), reg=self.epsilon)
-                        elif method == "jpmbot":
-                            if self.epsilon == 0:
-                                pi = ot.partial.partial_wasserstein(a, b, total_cost.detach().cpu().numpy(), self.mass)
-                            else:
-                                _M = total_cost.detach().cpu().numpy()
-                                _M = _M / (_M.max() + 1e-10)
-                                pi = ot.partial.entropic_partial_wasserstein(
-                                    a, b, _M, m=self.mass, reg=self.epsilon
-                                )
+                        pi = self._solve_inner_ot(
+                            a, b, total_cost.detach().cpu().numpy(), method
+                        )
                         pi = torch.from_numpy(pi).float().cuda()
 
                         # DA loss weighted by the outer plan: Π[i,j] · ⟨πᵢⱼ, Cᵢⱼ⟩
@@ -592,26 +576,9 @@ class DigitsDA:
 
                             # Solve inner OT for pair (i, j)
                             a, b = ot.unif(g_xs_mb.size()[0]), ot.unif(g_xt_mb.size()[0])
-                            if method == "jumbot":
-                                pi = ot.unbalanced.sinkhorn_knopp_unbalanced(
-                                    a, b, total_cost.detach().cpu().numpy(), self.epsilon, self.tau
-                                )
-                            elif method == "jdot":
-                                if self.epsilon == 0:
-                                    pi = ot.emd(a, b, total_cost.detach().cpu().numpy())
-                                else:
-                                    pi = ot.sinkhorn(a, b, total_cost.detach().cpu().numpy(), reg=self.epsilon)
-                            elif method == "jpmbot":
-                                if self.epsilon == 0:
-                                    pi = ot.partial.partial_wasserstein(
-                                        a, b, total_cost.detach().cpu().numpy(), self.mass
-                                    )
-                                else:
-                                    _M = total_cost.detach().cpu().numpy()
-                                    _M = _M / (_M.max() + 1e-10)
-                                    pi = ot.partial.entropic_partial_wasserstein(
-                                        a, b, _M, m=self.mass, reg=self.epsilon
-                                    )
+                            pi = self._solve_inner_ot(
+                                a, b, total_cost.detach().cpu().numpy(), method
+                            )
                             pi = torch.from_numpy(pi).float().cuda()
                             da_loss = torch.sum(pi * total_cost)
                             list_da_loss.append(da_loss)
@@ -663,24 +630,9 @@ class DigitsDA:
 
                     # Re-solve inner OT (π is detached, used as fixed weights)
                     a, b = ot.unif(g_xs_mb.size()[0]), ot.unif(g_xt_mb.size()[0])
-                    if method == "jumbot":
-                        pi = ot.unbalanced.sinkhorn_knopp_unbalanced(
-                            a, b, total_cost.detach().cpu().numpy(), self.epsilon, self.tau
-                        )
-                    elif method == "jdot":
-                        if self.epsilon == 0:
-                            pi = ot.emd(a, b, total_cost.detach().cpu().numpy())
-                        else:
-                            pi = ot.sinkhorn(a, b, total_cost.detach().cpu().numpy(), reg=self.epsilon)
-                    elif method == "jpmbot":
-                        if self.epsilon == 0:
-                            pi = ot.partial.partial_wasserstein(a, b, total_cost.detach().cpu().numpy(), self.mass)
-                        else:
-                            _M = total_cost.detach().cpu().numpy()
-                            _M = _M / (_M.max() + 1e-10)
-                            pi = ot.partial.entropic_partial_wasserstein(
-                                a, b, _M, m=self.mass, reg=self.epsilon
-                            )
+                    pi = self._solve_inner_ot(
+                        a, b, total_cost.detach().cpu().numpy(), method
+                    )
                     pi = torch.from_numpy(pi).float().cuda()
 
                     # DA loss weighted by the outer plan entry for this matched pair

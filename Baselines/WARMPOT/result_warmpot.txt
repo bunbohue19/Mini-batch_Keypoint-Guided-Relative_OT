@@ -10,3 +10,11 @@ method warmpot_Pr2Re (Product->Real_World), best_acc: 88.9
 method warmpot_Re2Ar (Real_World->Art), best_acc: 80.35
 method warmpot_Re2Cl (Real_World->Clipart), best_acc: 68.24
 method warmpot_Re2Pr (Real_World->Product), best_acc: 86.67
+method warmpot_Ar2Cl (Art->Clipart), best_acc: 56.3
+method warmpot_Ar2Pr (Art->Product), best_acc: 76.86
+method warmpot_Ar2Re (Art->Real_World), best_acc: 84.37
+method warmpot_Cl2Ar (Clipart->Art), best_acc: 68.14
+method warmpot_Cl2Pr (Clipart->Product), best_acc: 71.37
+method warmpot_Cl2Re (Clipart->Real_World), best_acc: 77.58
+method warmpot_Pr2Ar (Product->Art), best_acc: 71.53
+method warmpot_Pr2Cl (Product->Clipart), best_acc: 55.7
