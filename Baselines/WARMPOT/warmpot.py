@@ -265,7 +265,7 @@ def train(args):
 
         optimizer.step()
 
-    log_str = f"Acc: {best_acc}\n"
+    log_str = f"Acc: {best_acc}\n" 
     print(log_str)
 
     return best_acc
@@ -319,7 +319,7 @@ if __name__ == "__main__":
         help="scales the source distribution by 1/beta"
     )
     parser.add_argument(
-        "--mass", type=float, default=0.5, help="mass transported (alpha in the bound)"
+        "--mass", type=float, default=0.65, help="mass transported (alpha in the bound)"
     )
     parser.add_argument(
         "--mass_increase_i", type=int, default=2500, 

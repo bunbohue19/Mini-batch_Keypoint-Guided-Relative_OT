@@ -60,8 +60,8 @@ for s in 0 1 2 3; do
             --eta2 7.0 \
             --eta3 0.25 \
             --epsilon 7.0 \
-            --mass 0.8 \
-            --beta 0.35 \
+            --mass 0.65 \
+            --beta 1.00 \
             --max_iterations 5000 \
             --test_interval 100 \
             --seed 2020 \
